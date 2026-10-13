@@ -8,7 +8,9 @@ This stage turns one Episode Brief into a reviewable story and storyboard that S
 
 The repository is currently in `specification_only` mode. The inputs, JSON envelope, and handoff below describe what a future execution run will consume; they do not request a real `project_id`, content idea, script, dialogue, panel count, canvas size, or image-generation choice now. Until the user explicitly requests actual project execution, this stage remains a contract and review-model definition.
 
-The storyboard is a planning and review artifact, not an image-generation prompt and not a final visual asset. It includes written cut-by-cut decisions and low-fidelity visual roughs detailed enough to review the whole episode. Each rough must make the character's readable action, pose/expression, staging, focal event, and meaningful change from adjacent beats visible. A geometric placeholder or camera-label-only card may be used as a development fixture, but it cannot count as a usable storyboard or acceptance evidence. The rendering technique remains open; if it uses a generative image model or an external service, that execution follows the separate Stage 05/P1 evaluation and authorization boundary. A prompt or generated image may be produced later from the approved package, but neither may replace the human-readable story and panel/shot decisions.
+The storyboard is a planning and review artifact, not an image-generation prompt and not a final visual asset. It includes written cut-by-cut decisions and low-fidelity visual roughs detailed enough to review the whole episode. Each rough must make the character's readable action, pose/expression, staging, focal event, and meaningful change from adjacent beats visible. A geometric placeholder or camera-label-only card may be used as a development fixture, but it cannot count as a usable storyboard or acceptance evidence. The rendering technique remains open; using a generative image model or external renderer requires the decision pack's separate **P1 execution gate**, covering the exact task, tool, inputs, limits, and rights/data conditions. Stage 05's `IG-C1` candidate-evaluation checkpoint does not grant that permission. Neither a prompt nor a generated image replaces the human-readable story and panel/shot decisions.
+
+Pre-G2 review roughs may be created to prepare G2 from the selected story/G1 reference, exact character/reference versions, and pending cut decisions (or an explicitly labeled synthetic harness fixture). Their outputs remain versioned Stage 04 roughs and a storyboard overview; the rough being prepared does not require its own G2 approval first. This does not authorize execution during specification work. Post-G2 Stage 05 episode image drafts instead require the exact human-approved G2 package and execution permission covering that separate task. A rough or synthetic test asset cannot substitute for G2, become a selected Stage 05 draft automatically, or bypass G3. Record output role, exact source versions, execution-permission reference/scope, provenance, and next consumer separately; later reuse as a technical reference requires explicit role/use permission and lineage. The persisted rough/evaluation record remains pending schema reconciliation.
 
 
 ## 2. Scope and non-goals
@@ -27,7 +29,7 @@ The storyboard is a planning and review artifact, not an image-generation prompt
 ### Non-goals
 
 - Creating a concrete story, script, storyboard, image, prompt, or generation run during the specification phase.
-- Selecting ComfyUI, ControlNet, IP-Adapter, a model, a LoRA, or another image-generation workflow. Those decisions belong to Stage 05 after this package is approved.
+- Selecting ComfyUI, ControlNet, IP-Adapter, a model, a LoRA, or another post-G2 episode image-draft workflow; those decisions belong to Stage 05 after this package is approved. Evaluation or use of pre-G2 rough tools for G2 preparation remains within the Stage 04 boundary and follows the decision pack's separate P1 execution gate.
 - Replacing the account/series strategy or character bible with a per-content exception.
 - Defining a posting calendar, caption strategy, audience-growth claim, or publication decision.
 - Treating a reference panel, wording, character, logo, or distinctive composition as a source to copy.
@@ -242,6 +244,8 @@ At minimum, define or explicitly mark unknown:
 - thumbnail/readability check size and the result status.
 
 The storyboard may use layout zones such as `top_left`, `bottom_right`, or a project-owned coordinate system, but a zone is not a measurement unless the format contract defines its coordinates. A text object must not cover the focal action or an identity-bearing cue without an explicit human decision.
+
+The text-mode choice remains unresolved until a human selects it. Before Stage 05 handoff, verify that Stage 05 explicitly supports the selected mode and its validation path. In-image, mixed, or `unknown` mode is a handoff blocker until that support is confirmed; do not silently convert the storyboard to overlay. The currently described Stage 05 artwork-plus-separate-text path does not settle the broader product choice. Any mode or approved wording/layout change creates a new version and reopens the affected G1/G2 review.
 
 ## 7. Procedure
 
@@ -628,6 +632,7 @@ Before requesting `G2`, verify the exact package version against this checklist:
 - [ ] Each cut has visual purpose, observable action, expression/gesture, composition/focal point, gaze direction/target, pacing, dialogue space, and adjacent continuity. Notes plus Level 1 roughs make the intended visual beat reviewable without invention.
 - [ ] Every beat and text object is referenced correctly; IDs are unique and there are no orphaned required records.
 - [ ] Text copy/status, reading order, placement zone, safe area, occlusion, and overlay responsibility are explicit.
+- [ ] The chosen text mode and Stage 05 support evidence are identified; in-image/mixed/unknown handoffs remain blocked until explicitly supported, without automatic overlay conversion.
 - [ ] Panel/shot count, canvas, crop behavior, and accessibility limits are known or visibly marked `unknown` with a blocker/question.
 - [ ] Continuity and intentional transitions are described for adjacent units.
 - [ ] Rights restrictions, `not_to_copy`, source observation IDs, and unresolved risks are carried forward.
@@ -657,10 +662,11 @@ Automated validation may report malformed JSON, duplicate IDs, missing reference
 Stage 05 consumes the approved storyboard package for the same `project_id`. The handoff must provide:
 
 - the exact `storyboard_package` artifact ID/version and `content_id`;
+- the exact selected story version and separate G1 decision reference, plus the G2 decision bound to this package; any generative execution also requires the decision pack's P1 execution permission covering the downstream task;
 - the selected strategy/series/pillar version and the exact character package/sheet version;
 - the relevant Stage 01 observation IDs, `not_to_copy` rules, and rights restrictions;
-- the ordered unit list with beat mapping, character IDs, action, emotion, camera, background, props, and continuity;
-- text objects with exact copy/status, reading order, placement/overlay responsibility, and readability constraints;
+- the ordered unit list with beat mapping, character IDs, action, emotion, camera, background, props, and continuity, including exact `visual_purpose`, character `facing_or_gaze`/`gaze_target`, and `pacing` fields with their source artifact/version/field references; Stage 05 carries these into the corresponding prompt and output/review mapping without inventing missing decisions;
+- text objects with exact copy/status, reading order, placement responsibility, selected mode, Stage 05 mode-support evidence or blocker, and readability constraints;
 - canvas, safe-area, crop, thumbnail, accessibility, and export requirements or explicit unknowns;
 - generation boundaries: `must_include`, `may_vary`, `must_avoid`, and human overlay/retouch work;
 - validation results, unresolved risks, approval record, provenance, and the next consumer.

@@ -215,7 +215,8 @@ Stage 06의 수정/QA/내보내기 범위와 사람 G4/G5 기록을 합의한다
 통합 검토 결과:
 
 - `synthetic-model-evaluation-plan.md`의 USD 5는 D-0032 추천값이며, 사용자 확인 전 실행 기본값이나 비용 승인으로 취급하지 않는다.
-- Stage 04는 콘티 러프 생성 표현 방식만 정의하며, ComfyUI/ControlNet 등 Stage 05 이미지 생성 스택을 채택하지 않는다. Stage 04 러프에 생성형 이미지 또는 외부 서비스를 쓰는 비교 실행도 P1 평가·별도 승인 대상이다. 기하학적 목업은 개발용 fixture일 뿐 창작 품질 수용 증거가 아니다.
+- Stage 04 G2 준비용 pre-G2 러프와 Stage 05 G2 이후 에피소드 이미지 초안은 별도 산출물·실행 범위다. pre-G2 생성형 러프도 decision pack의 P1 실행허가가 필요하고, Stage 05의 내부 `IG-C0`–`IG-C7` 평가 체크포인트는 그 허가를 대체하지 않는다. 기하학적 목업은 개발용 fixture일 뿐 창작 품질 수용 증거가 아니다.
+- Stage 04의 텍스트 렌더링 모드가 미정이거나 Stage 05가 지원한다고 확인되지 않은 in-image/mixed 모드이면 자동 overlay 전환 없이 blocker로 둔다. `visual_purpose`, `gaze_target`, `pacing`은 정확한 원본 버전과 함께 Stage 05 prompt·검토 증거까지 전달한다. 별도 러프/평가 자료의 저장 스키마와 Stage 05 manifest 정합화는 남은 P0 계약 작업이다.
 - `platform-mvp-scope.md`의 D-0027 순서는 역사적 구현 기준으로 표시하고, 현재 제안은 Stage 04 합성 수직 슬라이스 우선으로 갱신했다. 기존 로컬 저장·백업·격리 경계는 별도 변경이 없는 한 유지한다.
 - Stage 07은 LangGraph를 첫 슬라이스의 오케스트레이션 선택으로, Python 상태 머신을 fallback으로 기록한다. 이는 영구 Stage 07 엔진 선택이나 구현 재개 승인이 아니다. D-0032 역할 수와 반복·재시도 수치는 추천 상태다.
 - Stage 01–03과 Stage 04의 새 artifact fields는 기존 MVP 스키마와 정합화되지 않았다. 이를 구현 전 계약 작업으로 P0에 남겼다.

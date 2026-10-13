@@ -50,7 +50,7 @@ Stage 05 accepts exact, versioned inputs bound to one project and episode. File 
 | Input | Required information | Minimum status |
 |---|---|---|
 | `project_id` and `content_id` | Stable project/content boundary and state transition context | Present and consistent |
-| Stage 04 storyboard package | Exact `artifact_id`/version, selected story, ordered units, character IDs, text plan, layout constraints, generation boundaries, rights restrictions, validation, and `G2` decision | Human-approved `G2` version |
+| Stage 04 storyboard package | Exact `artifact_id`/version, selected story version and separate `G1` decision reference, ordered units with visual purpose/gaze target/pacing, character IDs, text plan and mode, layout constraints, generation boundaries, rights restrictions, validation, and `G2` decision | Human-approved `G2` version; exact `G1` story reference remains identifiable |
 | Stage 02 character package | Exact character package and sheet/reference IDs, invariants, allowed variation, forbidden traits, provenance restrictions | Human-approved `CG2` version, or the exact version embedded in the approved Stage 04 package |
 | Stage 01 research package | Relevant observation IDs, `not_to_copy`, use classifications, source restrictions, and open risks | Approved package or explicitly inherited restrictions |
 | Stage 03 strategy package | Selected series/pillar, format, audience/tone constraints, editorial filters, and brand restrictions | Human-approved `SG2` version, carried through Stage 04 |
@@ -136,17 +136,27 @@ Stage 05 covers the visual-draft transition:
 storyboard --G3 Visual draft--> ai_draft --Stage 06 handoff--> human_retouch
 ```
 
-`G2` is a mandatory precondition. A generated candidate can exist as a failed or unapproved work-in-progress, but it is not an `ai_draft` state until the exact package passes the human visual-draft gate. Rejection preserves the candidate and names one of these paths:
+`G2` is a mandatory precondition for the Stage 05 episode image-draft run, not for creating Stage 04's pre-G2 review roughs or for an independently authorized synthetic tool evaluation. Those scopes are separated in section 4.3. A generated Stage 05 candidate can exist as a failed or unapproved work-in-progress after G2, but it is not an `ai_draft` state until the exact package passes the human visual-draft gate. Rejection preserves the candidate and names one of these paths:
 
 - return to Stage 04 `storyboard` rework when the approved plan is incomplete, contradictory, or unsuitable for generation;
 - remain in Stage 05 and create a new generation run when the plan is valid but the candidate fails;
 - stop for a rights, identity, brand, privacy, or project-isolation decision when the risk cannot be resolved by regeneration.
 
+### 4.3 Pre-G2 roughs, evaluation, and post-G2 drafts
+
+| Scope | Exact input and output | Creative review and execution permission |
+|---|---|---|
+| Stage 04 review rough, before G2 | Selected story/G1 reference (or explicitly labeled synthetic harness fixture), character/reference versions, current pending storyboard unit decisions; outputs are versioned rough thumbnails and a composed storyboard overview linked to those units | The result supports G2 review and remains a Stage 04 artifact. It is not a Stage 05 draft, a G2 approval, or a G3 result. A generative local model or external rendering service additionally requires the decision pack's **P1 execution gate** with scoped model/tool, inputs, limits, rights/data conditions, and explicit execution permission before use. No G2 prerequisite is imposed on the rough that is needed to prepare G2. |
+| Synthetic candidate evaluation | Human-reviewed frozen synthetic source snapshot and rubric, declared task purpose; outputs are comparison evidence and test assets | The decision pack's P1 execution gate is required. Review of a fixture authorizes only its stated test use when separately permitted; it does not fabricate production G1/G2 approvals or advance content state. Findings may inform rough-rendering or draft tools within their tested scope. |
+| Stage 05 episode image draft, after G2 | Exact human-approved G2 package and identifiable selected story/G1 reference, exact character/reference versions; outputs are per-unit image candidates, new run manifest, separate text/layout and episode draft preview | P1 execution conditions/permission must cover this task as well as G2 input approval. Prior permission for a rough or synthetic comparison does not automatically cover this run. Human G3 reviews the exact new draft package. It remains a draft, not a final/publishable export. |
+
+Record the task purpose, source versions, owner, output role, execution-permission reference/scope, creative-review state, and next consumer separately. A rough-rendering attempt may retain tool/prompt/seed/asset provenance, but must not be labeled `image_generation_run_manifest` as the Stage 05 episode aggregate or appear in its selected draft candidates merely because the same renderer was used. The persisted rough/evaluation record shape is `unknown` pending schema reconciliation; no new artifact schema or approval gate is adopted here. Missing purpose, permission scope, or required source status is a blocker. Reusing a rough as a later technical reference requires explicit role/use permission and exact-version lineage; it does not waive G2 or G3.
+
 ## 5. Model and workflow selection contract
 
 ### 5.1 Selection principle
 
-The project does not fix a generation technology in advance. A candidate is selected only after it is evaluated against the exact approved storyboard and the first-slice constraints. The record must distinguish:
+The project does not fix a generation technology in advance. A candidate is selected only after evaluation against the exact source snapshot and constraints for its declared purpose in section 4.3. For a Stage 05 episode draft, that source is the approved G2 storyboard; pre-G2 rough-tool evaluation and independent synthetic comparison use their separately reviewed snapshots without fabricating G2 approval. The record must distinguish:
 
 - `required`: directly imposed by the approved input or a human decision;
 - `preferred`: a useful property that may be traded off;
@@ -177,7 +187,7 @@ The evaluation also records failure modes, resource/cost observations, latency, 
 
 ### 5.3 Selection procedure
 
-1. Freeze the exact Stage 04 package and list the constraints that the candidate must satisfy.
+1. Declare the purpose (pre-G2 rough-tool evaluation, synthetic comparison, or post-G2 episode draft) and freeze its exact source snapshot and constraints under section 4.3. The episode draft path requires the exact approved Stage 04 G2 package; comparison/rough preparation must not fabricate G2 approval.
 2. Before provider selection, use the synthetic-only protocol in `docs/synthetic-model-evaluation-plan.md`; no real project inputs enter that comparison. For a separately authorized content run, use only approved project references and the units needed to answer the selection questions.
 3. Register candidate IDs with model/workflow/tool fields as `unknown` until the execution environment exposes exact values.
 4. Run equivalent tests with the same review criteria and record failed attempts; do not compare an undocumented best result to a documented full run.
@@ -208,6 +218,7 @@ At minimum, a prompt bundle contains:
 - locked project and output context;
 - character identity constraints and permitted variation;
 - scene, action, emotion, camera, background, props, continuity, and focal-point instructions;
+- per-unit visual purpose, gaze direction and target, and pacing/transition intent, with their Stage 04 source field references;
 - `must_include`, `may_vary`, and `must_avoid` blocks;
 - text and layout responsibility, including whether text is deliberately left for human overlay;
 - reference IDs, allowed roles, restriction status, and transformation/abstraction note;
@@ -230,20 +241,41 @@ Before a run begins, compare the rendered prompt package with the storyboard:
 
 The prompt renderer may normalize syntax for a selected workflow, but the normalized result and its source bundle must both be retained when provenance is available.
 
+### 6.3 Stage 04 field-to-output mapping
+
+| Stage 04 decision | Derived prompt/review instruction | Stage 05 output evidence |
+|---|---|---|
+| Visual purpose and linked beat | State what observable action/focal event must communicate the cut's information or emotion; preserve `must_include` rather than substituting an aesthetic mood | Unit candidate mapped to the exact beat/unit/source field; reviewer identifies whether the intended event is readable, missing, or contradicted |
+| Gaze direction and target | Preserve who looks toward which character/object/location, facing and screen direction; distinguish a specified target from `unknown` | Cut-level gaze/target observation plus adjacent-unit continuity check; a renderer's inability to express it is disclosed, not replaced with a generic pose |
+| Pacing, transition, and order | Preserve reaction hold, reveal, information change and adjacency in the composed sequence; translate to image staging only where the source specifies it | Ordered episode preview with beat/unit mapping and reading-flow observations; image generation does not silently add/remove/reorder cuts or decide timing |
+| Text IDs, copy/status, speaker, anchors and mode | Apply only the explicitly supported text responsibility in section 6.4; leave required space without covering focal action or identity cues | Exact separate text/layout version and preview checks, or a blocker for unresolved/unsupported mode |
+
+Each mapping records the source artifact/version/field, derived prompt ID, unit output IDs, observation, and unresolved issue. If a necessary visual purpose, gaze target, or pacing decision is missing/contradictory, return the affected unit for Stage 04 clarification; do not invent it. Deliberately unspecified variation is allowed only when the source's `may_vary` explicitly permits it. These mapping fields require later schema reconciliation and are not a claim of runtime support.
+
+### 6.4 Text mode support and unresolved choices
+
+The path currently described and compared here is artwork plus separately editable Korean text/layout and a composed review overlay. The broader first-slice support policy remains `unknown` pending human reconciliation with Stage 04: this document does not approve in-image lettering, a mixed mode, or automatic mode conversion. A model's ability to draw Korean does not establish support or text editability.
+
+- Explicit separate-overlay responsibility: preserve exact text ID/copy/status/speaker and anchors; render artwork without dialogue/captions, and retain the overlay separately. If copy is assigned to later human work, mark it pending and reflect that permitted limit in the review package.
+- In-image, mixed, missing, or conflicting mode: record `text_mode_support = unknown` and a blocker before the affected generation; return to Stage 04/human review to choose an explicitly supported mode or a separately specified validation path. Do not change the approved storyboard to overlay silently or accept baked-in text as a substitute.
+- Text-only correction: preserve artwork and version the source text/preview. If approved source copy, speaker, placement, meaning, or constraints change, apply Stage 04's scope/impact rules and reopen the applicable G1/G2 review before a refreshed G3 package. No image regeneration is triggered solely by the text edit.
+
 ## 7. Generation procedure and reviewable intermediate outputs
 
 The procedure is deliberately staged so that a human can inspect where a failure entered the process. Each output is a versioned, episode-scoped artifact within its owning project, or an explicitly referenced external artifact.
 
+`IG-C0`–`IG-C7` below are Stage 05 evidence checkpoints (formerly local `P0`–`P7`). They are distinct from the decision pack's P0/P1/P2/P3 permission gates. In particular, `IG-C1` candidate evaluation cannot grant or replace the decision pack's **P1 execution permission**; that permission must exist before any authorized evaluation call. This naming clarification changes no human policy or authority.
+
 | Checkpoint | Required intermediate output | Review purpose |
 |---|---|---|
-| `P0` Preflight | Input envelope, approval evidence, scope check, restriction carry-forward, and blocker list | Confirms that the run may start and that Stage 04 is not being silently changed |
-| `P1` Candidate evaluation | Candidate matrix, test protocol, failed/accepted observations, human selection decision | Explains why the selected model/workflow is fit for this scoped run |
-| `P2` Prompt package | Versioned structured prompt bundle and rendered per-unit instructions | Makes translation from storyboard to generation inspectable |
-| `P3` Workflow preparation | Resolved workflow/tool settings, input reference manifest, parameter profile, and validation result | Shows what will actually execute without hiding defaults |
-| `P4` Pilot outputs | Small scoped output set, per-output metadata, contact sheet/review board, and failure notes | Finds identity, layout, rights, and consistency failures before a larger run |
-| `P5` Unit batch outputs | All attempted outputs, including failed/quarantined outputs, with unit mapping and checksums when available | Establishes coverage and complete provenance |
-| `P6` Draft review package | Selected draft IDs, alternatives, comparison board, review observations, unresolved risks, and proposed decision | Gives the human a reviewable visual-draft package |
-| `P7` G3 decision record | Human approval or rework decision for exact draft/package versions | Authorizes or rejects the `ai_draft` transition |
+| `IG-C0` Preflight | Input envelope, approval evidence, scope check, restriction carry-forward, and blocker list | Confirms that the run may start and that Stage 04 is not being silently changed |
+| `IG-C1` Candidate evaluation | Candidate matrix, test protocol, failed/accepted observations, human selection decision | Explains why the selected model/workflow is fit for this scoped run |
+| `IG-C2` Prompt package | Versioned structured prompt bundle and rendered per-unit instructions | Makes translation from storyboard to generation inspectable |
+| `IG-C3` Workflow preparation | Resolved workflow/tool settings, input reference manifest, parameter profile, and validation result | Shows what will actually execute without hiding defaults |
+| `IG-C4` Pilot outputs | Small scoped output set, per-output metadata, contact sheet/review board, and failure notes | Finds identity, layout, rights, and consistency failures before a larger run |
+| `IG-C5` Unit batch outputs | All attempted outputs, including failed/quarantined outputs, with unit mapping and checksums when available | Establishes coverage and complete provenance |
+| `IG-C6` Draft review package | Selected draft IDs, alternatives, comparison board, review observations, unresolved risks, and proposed decision | Gives the human a reviewable visual-draft package |
+| `IG-C7` G3 decision record | Human approval or rework decision for exact draft/package versions | Authorizes or rejects the `ai_draft` transition |
 
 The G3 review package includes each selected per-unit image and a composed preview showing the full episode in its selected layout. A contact sheet or board may provide both views; the chosen representation and version are recorded. A missing per-unit image or full-episode preview is a review blocker, not a pass.
 
@@ -260,7 +292,7 @@ The run must not silently expand from a unit subset to the whole content item. I
 
 ### 7.2 Selected-cut revision and Korean lettering
 
-Recommendation pending review (D-0032): initially one rough per unit, then one extra candidate only for a human-selected unit. The human names the unit IDs and intended change; the run preserves untouched candidate IDs and records the affected beat, source version, edit mask/scope when applicable, and `retry_of` or `supersedes`. A new episode preview composes the selected new candidates with the unchanged units. Cross-unit continuity is reviewed again; no automatic whole-episode regeneration is allowed. If a source/storyboard change affects other units, explain those dependencies and obtain the expanded scope before generating them. Limit exhaustion or conflicting evaluator feedback stops for human review, not automatic approval.
+Recommendation pending review (D-0032): initially one low-detail image-draft candidate per unit, then one extra candidate only for a human-selected unit. Here a low-detail candidate is a post-G2 Stage 05 draft, not a pre-G2 Stage 04 storyboard rough. The human names the unit IDs and intended change; the run preserves untouched candidate IDs and records the affected beat, source version, edit mask/scope when applicable, and `retry_of` or `supersedes`. A new episode preview composes the selected new candidates with the unchanged units. Cross-unit continuity is reviewed again; no automatic whole-episode regeneration is allowed. If a source/storyboard change affects other units, explain those dependencies and obtain the expanded scope before generating them. Limit exhaustion or conflicting evaluator feedback stops for human review, not automatic approval.
 
 Keep Korean dialogue/captions, speaker mapping, balloon/layout anchors, and text-safe areas in a separately versioned editable record/layer. Generate artwork without dialogue lettering; compose a review overlay without overwriting the artwork. Check exact text, Hangul glyph coverage, clipping, reading order, and legibility in the whole-episode preview. A text-only correction updates the text/preview version without invoking image generation. In-image stray lettering is a recorded defect. Krita or another editor is an optional candidate for later manual polish, not a mandatory Stage 05 integration or a replacement for this separate text contract.
 
@@ -557,7 +589,7 @@ Automation may stop a run or request review. It may not waive a restriction, sel
 
 ## 11. Human approval gates
 
-`P0`–`P6` are preparation and evidence checkpoints. `P7` records the human `G3` decision for the exact draft package; it is not an additional automated checkpoint or a substitute for the G3 gate.
+`IG-C0`–`IG-C6` are preparation and evidence checkpoints. `IG-C7` records the human `G3` decision for the exact draft package; it is not an additional automated checkpoint or a substitute for the G3 gate. None replaces the decision pack's P1 execution gate.
 
 | Gate | Decision | Minimum evidence | Rework path |
 |---|---|---|---|
@@ -571,11 +603,14 @@ Before requesting `G3`, validate the exact manifest and review package:
 
 - [ ] `project_id` and `content_id` are present and consistent in every envelope, input, prompt, reference, output, and approval record.
 - [ ] The exact Stage 04 `storyboard_package` version is recorded and has human `G2` approval.
+- [ ] The exact selected story version and its separate G1 decision reference remain identifiable; pre-G2 roughs/test assets are not mislabeled as selected Stage 05 drafts.
 - [ ] Stage 01 restrictions, Stage 02 identity invariants, Stage 03 format/brand constraints, and Stage 04 generation boundaries are carried forward.
 - [ ] The selected model/workflow candidate is identified or explicitly `unknown`, and the human selection decision and scope are recorded.
 - [ ] The synthetic comparison uses the same frozen input/rubric and discloses candidate-specific transformations, unsupported controls, failed attempts, and any `not_run` local measurements.
 - [ ] Target-machine requirements are verified against the selected PC rather than the current host; costs, transfer payload, retention terms, and separate execution authorization are recorded before a request.
 - [ ] Prompt bundle versions map to exact storyboard units, beats, character IDs, text responsibility, and `must_include`/`may_vary`/`must_avoid` rules.
+- [ ] Visual purpose, gaze direction/target, and pacing map from exact source fields to prompt/output/review evidence; required missing decisions are blockers.
+- [ ] The source text mode is explicitly supported for this run; unresolved/in-image/mixed modes are blocked rather than silently converted to overlay.
 - [ ] No prompt or reference copies protected wording, characters, panels, logos, distinctive artwork, or a recognizable artist's expression.
 - [ ] Every reference has an exact artifact/version, role, project boundary, rights/use status, and upload/use decision; unknown permission blocks use.
 - [ ] Model revision, workflow revision, adapters/components, tool versions, parameters, defaults, seed policy, and environment are recorded or marked `unknown`.
@@ -649,6 +684,8 @@ Stage 06 must not infer missing provenance, replace the selected output with a d
 
 ## 16. Open questions
 
+- Which first-slice text modes will the human accept, and what separate validation is required if in-image/mixed lettering is later supported? Until resolved, those paths are blocked.
+- Which persisted record shape will distinguish Stage 04 rough-render provenance, independent synthetic evaluation evidence, and the Stage 05 episode aggregate while preserving their lineage?
 - Which target PC profile and local model/workflow will be evaluated, and which external endpoint/tier will be compared after authorization?
 - Which trial sample count, selected-cut edit/repeatability allowance, timeout, and numeric total/per-run/monthly cost caps will the human accept? D-0032 values remain recommendations.
 - Which transfer/retention/deletion conditions and local backup/retention policy will be accepted for each candidate?
