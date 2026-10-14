@@ -4,7 +4,7 @@
 
 Specify a future harness that validates the versioned handoffs from Stages 01–06, coordinates bounded work, and stops at human decisions. The harness makes contract failures visible and repeatable; it does not decide whether a creative or rights judgment is correct.
 
-This is a specification-only deliverable. It defines interfaces, state boundaries, recovery behavior, audit requirements, and future acceptance criteria. It does not create an executable harness, workflow, script, CI configuration, test fixture, project data, or media.
+This document defines interfaces, state boundaries, recovery, audit and acceptance criteria. D-0035 authorizes implementing its bounded Stage 04 synthetic slice under the [P0 implementation baseline](../p0-implementation-baseline.md), including executable orchestration, checkpointing and meaningful tests. The full Stage 07 production harness remains future scope; provider calls and real content still use P1/P2.
 
 ## 2. Scope and non-goals
 
@@ -33,7 +33,7 @@ Automation may validate evidence, prepare a review packet, block a package, and 
 
 The harness is also the bounded orchestrator for stage agents. A platform can host this workflow: its interface presents the user's current step and artifact, while the orchestrator resolves exact-version inputs, dispatches a role-specific agent or tool, validates the result, requests a bounded evaluation/revision, and records the trace. The user-facing flow should not expose queue mechanics or gate codes as creative tasks. The product interaction and first-slice requirements are defined in [Product direction revision](../product-direction-revision.md).
 
-For the first creative vertical slice, D-0032 proposes four logical roles: story generator, storyboard planner, deterministic contract validator, and evaluator. This role count and the numeric limits remain recommendations awaiting product review. Roles may share a model/runtime, but each receives a distinct instruction, least-privilege input set, output contract, and versioned rubric. Later Stage 05 work can add a versioned image-workflow adapter. Agent roles do not approve one another or the user.
+For the first technical slice, apply four logical specialist roles: story generator, storyboard planner, deterministic contract validator, and evaluator, supervised by the orchestrator. D-0035 applies D-0032's P0 role/retry recommendations as delegated engineering defaults: two automatic creative rewrites and one transient technical retry per bounded segment. Roles may share a model/runtime, but each receives a distinct instruction, required scoped inputs, an output contract and a versioned rubric. Later Stage 05 work can add a versioned image-workflow adapter. Agent roles do not approve one another or the user.
 
 The current first-slice engineering choice is LangGraph for local checkpointed orchestration and human pause/resume, with an explicit Python state machine as the simpler fallback if checkpoint persistence or recovery proves too costly. This does not select a permanent workflow engine for the full Stage 07 harness; that specification remains implementation-neutral outside the bounded slice.
 

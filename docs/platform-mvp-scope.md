@@ -2,6 +2,8 @@
 
 ## Status
 
+**2026-10-14 update:** D-0035 resumes implementation under the [P0 baseline](p0-implementation-baseline.md). The first new work unit is the Stage 04 synthetic orchestration slice and a simple conversational workspace. The Stage 01–05 capability list below describes the legacy prototype and future journey; it does not require rebuilding every phase simultaneously or prove creative acceptance. New studio v2 records coexist with legacy v1. Provider execution, real characters/episodes, and studio v2 complete backup/restore remain separately tracked prerequisites.
+
 The original local-platform decisions in this document were accepted by D-0013 and implementation began under D-0027. On 2026-10-13, D-0029 paused further implementation for product-direction revision. Read [Product direction revision](product-direction-revision.md) and the [pre-implementation decision pack](preimplementation-decision-pack.md) first: their user flow, tool evaluation, and agent-orchestration requirements supersede conflicting user-facing requirements below. Existing storage, backup, project-isolation, and human decision boundaries remain unless changed separately. The current UI and mock creative outputs are prototype behavior, not product acceptance evidence.
 
 ## Goal

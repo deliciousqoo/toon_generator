@@ -1,6 +1,6 @@
 # Operating rules
 
-> **Current direction:** D-0029 pauses implementation and reopens the user-facing requirements. The conversation-led workflow, simplified setup, dedicated character creation, story-first layout, immediate revision, and agent harness in [Product direction revision](product-direction-revision.md) supersede conflicting Stage 01–05 interaction details below until a reconciled baseline is accepted. This does not change the local storage, backup, project-isolation, or human-approval boundaries by itself.
+> **Current direction (2026-10-14):** D-0035 resumes `platform_build` with the delegated [P0 implementation baseline](p0-implementation-baseline.md). Implement the Stage 04 synthetic technical slice with the conversation-led workflow, simplified setup, independent character prerequisite, story-first layout, immediate revision, and agent harness in [Product direction revision](product-direction-revision.md). These supersede conflicting legacy Stage 01–05 interaction details below. The v1 backup remains a legacy capability; studio v2 backup/restore must be integrated and checked before claiming complete project portability. Provider execution and real-content use remain P1/P2.
 
 ## 1. Goal and scope
 

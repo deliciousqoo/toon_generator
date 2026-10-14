@@ -2,6 +2,8 @@
 
 ## Status and authority
 
+**2026-10-14 update:** D-0035 resumes `platform_build`. The [P0 baseline](p0-implementation-baseline.md) governs the additive studio v2 API/contracts, LangGraph runtime and revised workspace. The v1 schema and backup documented below remain unchanged for legacy data. Studio v2 checkpoint/version persistence is required now; its complete export/restore is a separate integration item and is not covered by a successful v1 backup check.
+
 This is the accepted implementation baseline for the personal local MVP. It settles the local stack, storage boundary, selected-file import and history-retention rules, minimum Stage 01–05 record contracts, backup choices, and synthetic acceptance evidence (D-0024–D-0026). The user explicitly started `platform_build` on 2026-10-12 (D-0027). The machine-readable contracts are in [the MVP JSON Schema](contracts/mvp-records-v1.schema.json); the accompanying [synthetic fixture set](contracts/fixtures/mvp-minimum-records.json) contains one representative record for every contract family. Provider calls and real-content execution still require separate authorization. See [the local application guide](local-platform-guide.md) for the implemented flow and runtime.
 
 The formal contracts here are intentionally the minimum needed to implement and validate Stages 01–05 with synthetic fixtures. They do not claim that Stages 00–09, hosted operation, or the full Stage 07 automation harness have been formalized. D-0029 pauses further implementation for product-direction review; this portability revision is `specification_only`. D-0033 preserves portability while leaving the intended target-machine profiles unknown.

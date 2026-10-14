@@ -2,7 +2,7 @@
 
 ## Project purpose
 
-This repository defines a personal, local-first workspace for the Instagram toon pipeline. The current app is a Stage 01–05 synthetic/mock prototype. D-0029 pauses further implementation while its product direction is revised; the next accepted baseline is tracked in `docs/product-direction-revision.md`. Real project/content production remains separately gated.
+This repository defines a personal, local-first workspace for the Instagram toon pipeline. The existing Stage 01–05 synthetic/mock prototype is retained as a legacy baseline. The user resumed implementation on 2026-10-14 (D-0035). Build the revised Stage 04 synthetic technical slice under `docs/p0-implementation-baseline.md`, with the product journey in `docs/product-direction-revision.md`. Real project/content production remains separately gated.
 
 ## Source of truth and authority
 
@@ -26,7 +26,7 @@ This repository defines a personal, local-first workspace for the Instagram toon
 
 ## Operating modes
 
-The repository entered `platform_build` through the user's explicit implementation request on 2026-10-12 (D-0027). On 2026-10-13, the user requested product-direction and specification revision before implementation continues (D-0029). For the current work, edit specifications only; do not change application code, integrate a provider, or use real content. Resume implementation only after the user accepts a reconciled scope. Provider calls and real content remain separately gated. The following rules apply whenever a workstream is in `specification_only` before its relevant explicit transition:
+The repository entered `platform_build` through the user's explicit implementation request on 2026-10-12 (D-0027), paused for product-direction revision on 2026-10-13 (D-0029), and resumed through the user's explicit instruction on 2026-10-14 (D-0035): “p0 기준을 권고안으로 정리하고 구현을 재개해”. The current work may change application code, install implementation dependencies, define gated provider adapters, and validate the synthetic Stage 04 slice. Apply the delegated P0 engineering recommendations and record their rationale; do not ask again for implementation restart. Executing a provider call and using real content remain governed by P1/P2. The following rules apply whenever a workstream is in `specification_only` before its relevant explicit transition:
 
 - define pipeline behavior, platform boundaries, contracts, approval gates, automation limits, recovery paths, storage, and provenance using abstract examples only;
 - use `unknown`, placeholder values, or example IDs instead of requesting or inventing real account names, character names, content ideas, scripts, dialogue, storyboard panels, dimensions, model choices, or publication data;
@@ -37,7 +37,7 @@ The repository entered `platform_build` through the user's explicit implementati
 The following modes are distinct:
 
 - `specification_only`: edit specifications and abstract examples only.
-- `platform_build`: previously authorized by D-0027; further implementation is paused under D-0029 until the user accepts a reconciled product scope. When resumed, use synthetic fixtures and the mock image adapter unless a provider call receives separate review and explicit authorization. Real project/content values remain prohibited.
+- `platform_build`: resumed by D-0035 for the revised Stage 04 technical slice. Use synthetic fixtures, visibly identify deterministic workers and developer thumbnails, and never report them as AI creative-quality evidence. Provider adapter code may be implemented, but actual calls require the relevant P1 configuration and execution scope. Real project/content values remain prohibited.
 - `content_execution`: after platform acceptance and a separate explicit user instruction, use approved real project inputs to produce an actual episode. Platform implementation, a completed stage, or synthetic acceptance does not imply this transition.
 
 Neither choosing the platform direction nor changing a stage index starts code or content production. Never infer a mode transition from a stage number, a completed specification, or a `next`/`queued`/`completed` label.
