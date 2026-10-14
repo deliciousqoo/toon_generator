@@ -1,0 +1,9 @@
+{
+  "execution_authorized": false,
+  "provider": "ollama_local_json",
+  "model": "unknown",
+  "input_scope": "synthetic_stage04",
+  "endpoint": "http://127.0.0.1:11434",
+  "max_calls": 12,
+  "timeout_seconds": 30
+}

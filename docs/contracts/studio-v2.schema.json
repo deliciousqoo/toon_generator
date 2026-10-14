@@ -1,0 +1,1291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "toon-studio-contract-v2",
+  "$defs": {
+    "ActionInput": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "approve_story",
+            "approve_format",
+            "approve_storyboard",
+            "revise_story",
+            "revise_storyboard",
+            "reject",
+            "retry"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "expected_revision": {
+          "minimum": 1,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "feedback": {
+          "default": "",
+          "maxLength": 5000,
+          "title": "Feedback",
+          "type": "string"
+        },
+        "target_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Target Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "action",
+        "expected_revision"
+      ],
+      "title": "ActionInput",
+      "type": "object"
+    },
+    "Approval": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "gate": {
+          "enum": [
+            "G1",
+            "FORMAT",
+            "TECHNICAL_BOARD"
+          ],
+          "title": "Gate",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "actor": {
+          "const": "human",
+          "title": "Actor",
+          "type": "string"
+        },
+        "scope": {
+          "const": "synthetic_technical_review",
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "gate",
+        "project_id",
+        "run_id",
+        "artifact_id",
+        "version",
+        "at",
+        "actor",
+        "scope"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "ArtifactVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "story",
+            "format_proposal",
+            "storyboard",
+            "story_evaluation",
+            "board_evaluation"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "artifact": {
+          "additionalProperties": true,
+          "title": "Artifact",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "artifact_id",
+        "version",
+        "created_at",
+        "summary",
+        "artifact"
+      ],
+      "title": "ArtifactVersion",
+      "type": "object"
+    },
+    "Beat": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "order": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Order",
+          "type": "integer"
+        },
+        "action": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "title": "Action",
+          "type": "string"
+        },
+        "emotion": {
+          "title": "Emotion",
+          "type": "string"
+        },
+        "dialogue": {
+          "title": "Dialogue",
+          "type": "string"
+        },
+        "visual_purpose": {
+          "title": "Visual Purpose",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "order",
+        "action",
+        "emotion",
+        "dialogue",
+        "visual_purpose"
+      ],
+      "title": "Beat",
+      "type": "object"
+    },
+    "CharacterPackage": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "identity_invariants": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Identity Invariants",
+          "type": "array"
+        },
+        "behavior_and_voice": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Behavior And Voice",
+          "type": "array"
+        },
+        "sheet_artifact_id": {
+          "title": "Sheet Artifact Id",
+          "type": "string"
+        },
+        "sheet_status": {
+          "enum": [
+            "fixture",
+            "missing",
+            "pending",
+            "approved"
+          ],
+          "title": "Sheet Status",
+          "type": "string"
+        },
+        "conversation_history": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Conversation History",
+          "type": "array"
+        },
+        "revision_history": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Revision History",
+          "type": "array"
+        },
+        "source_versions": {
+          "items": {
+            "$ref": "#/$defs/SourceVersion"
+          },
+          "title": "Source Versions",
+          "type": "array"
+        },
+        "approval_status": {
+          "enum": [
+            "synthetic_fixture",
+            "pending",
+            "approved"
+          ],
+          "title": "Approval Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "version",
+        "identity_invariants",
+        "behavior_and_voice",
+        "sheet_artifact_id",
+        "sheet_status",
+        "approval_status"
+      ],
+      "title": "CharacterPackage",
+      "type": "object"
+    },
+    "EvaluationArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "content_id": {
+          "title": "Content Id",
+          "type": "string"
+        },
+        "source_versions": {
+          "items": {
+            "$ref": "#/$defs/SourceVersion"
+          },
+          "title": "Source Versions",
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "story_evaluator",
+            "board_evaluator"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "fixture": {
+          "title": "Fixture",
+          "type": "boolean"
+        },
+        "recommendation": {
+          "enum": [
+            "revise",
+            "ready_for_human",
+            "blocked"
+          ],
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/Issue"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "feedback": {
+          "title": "Feedback",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "rubric_version": {
+          "enum": [
+            "story-v1",
+            "board-v1"
+          ],
+          "title": "Rubric Version",
+          "type": "string"
+        },
+        "criteria": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Criteria",
+          "type": "array"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "version",
+        "project_id",
+        "content_id",
+        "source_versions",
+        "role",
+        "provider",
+        "fixture",
+        "recommendation",
+        "issues",
+        "feedback",
+        "evidence",
+        "rubric_version",
+        "criteria"
+      ],
+      "title": "EvaluationArtifact",
+      "type": "object"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "at",
+        "role",
+        "stage",
+        "message",
+        "revision"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "FormatProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "content_id": {
+          "title": "Content Id",
+          "type": "string"
+        },
+        "source_versions": {
+          "items": {
+            "$ref": "#/$defs/SourceVersion"
+          },
+          "title": "Source Versions",
+          "type": "array"
+        },
+        "story_version": {
+          "title": "Story Version",
+          "type": "string"
+        },
+        "selected_format": {
+          "enum": [
+            "single_panel",
+            "multi_panel"
+          ],
+          "title": "Selected Format",
+          "type": "string"
+        },
+        "cut_count": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Cut Count",
+          "type": "integer"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "text_mode": {
+          "enum": [
+            "overlay",
+            "in_image",
+            "mixed",
+            "unknown"
+          ],
+          "title": "Text Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "version",
+        "project_id",
+        "content_id",
+        "source_versions",
+        "story_version",
+        "selected_format",
+        "cut_count",
+        "rationale",
+        "text_mode"
+      ],
+      "title": "FormatProposal",
+      "type": "object"
+    },
+    "Issue": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "blocker",
+            "warning"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Id"
+        }
+      },
+      "required": [
+        "id",
+        "severity",
+        "stage",
+        "code",
+        "message"
+      ],
+      "title": "Issue",
+      "type": "object"
+    },
+    "Panel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "order": {
+          "title": "Order",
+          "type": "integer"
+        },
+        "beat_id": {
+          "title": "Beat Id",
+          "type": "string"
+        },
+        "scene": {
+          "title": "Scene",
+          "type": "string"
+        },
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "expression": {
+          "title": "Expression",
+          "type": "string"
+        },
+        "dialogue": {
+          "title": "Dialogue",
+          "type": "string"
+        },
+        "camera": {
+          "title": "Camera",
+          "type": "string"
+        },
+        "background": {
+          "title": "Background",
+          "type": "string"
+        },
+        "composition": {
+          "title": "Composition",
+          "type": "string"
+        },
+        "visual_purpose": {
+          "title": "Visual Purpose",
+          "type": "string"
+        },
+        "gaze_target": {
+          "title": "Gaze Target",
+          "type": "string"
+        },
+        "pacing": {
+          "title": "Pacing",
+          "type": "string"
+        },
+        "text_placement": {
+          "title": "Text Placement",
+          "type": "string"
+        },
+        "continuity": {
+          "title": "Continuity",
+          "type": "string"
+        },
+        "thumbnail": {
+          "$ref": "#/$defs/Thumbnail"
+        }
+      },
+      "required": [
+        "id",
+        "order",
+        "beat_id",
+        "scene",
+        "action",
+        "expression",
+        "dialogue",
+        "camera",
+        "background",
+        "composition",
+        "visual_purpose",
+        "gaze_target",
+        "pacing",
+        "text_placement",
+        "continuity",
+        "thumbnail"
+      ],
+      "title": "Panel",
+      "type": "object"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "audience": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Audience",
+          "type": "string"
+        },
+        "series_direction": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "title": "Series Direction",
+          "type": "string"
+        },
+        "synthetic_confirmed": {
+          "const": true,
+          "title": "Synthetic Confirmed",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "schema_id": {
+          "const": "toon-studio-contract-v2",
+          "default": "toon-studio-contract-v2",
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "2.0.0",
+          "default": "2.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "fixture_versions": {
+          "items": {
+            "$ref": "#/$defs/SourceVersion"
+          },
+          "title": "Fixture Versions",
+          "type": "array"
+        },
+        "references": {
+          "items": {
+            "$ref": "#/$defs/ReferenceUse"
+          },
+          "title": "References",
+          "type": "array"
+        },
+        "character_package": {
+          "$ref": "#/$defs/CharacterPackage"
+        },
+        "series_package": {
+          "$ref": "#/$defs/SeriesPackage"
+        }
+      },
+      "required": [
+        "name",
+        "series_direction",
+        "synthetic_confirmed",
+        "id",
+        "created_at",
+        "fixture_versions",
+        "references",
+        "character_package",
+        "series_package"
+      ],
+      "title": "Project",
+      "type": "object"
+    },
+    "ReferenceUse": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "purpose": {
+          "enum": [
+            "character",
+            "story",
+            "composition",
+            "dialogue",
+            "format"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "observations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Observations",
+          "type": "array"
+        },
+        "not_to_copy": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Not To Copy",
+          "type": "array"
+        },
+        "permission_status": {
+          "enum": [
+            "synthetic_fixture",
+            "unknown",
+            "approved"
+          ],
+          "title": "Permission Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "version",
+        "purpose",
+        "observations",
+        "not_to_copy",
+        "permission_status"
+      ],
+      "title": "ReferenceUse",
+      "type": "object"
+    },
+    "Run": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_id": {
+          "const": "toon-studio-contract-v2",
+          "default": "toon-studio-contract-v2",
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "2.0.0",
+          "default": "2.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "idea": {
+          "title": "Idea",
+          "type": "string"
+        },
+        "input_kind": {
+          "title": "Input Kind",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "running",
+            "awaiting_review",
+            "blocked",
+            "stopped",
+            "completed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "current_stage": {
+          "title": "Current Stage",
+          "type": "string"
+        },
+        "current_role": {
+          "title": "Current Role",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "pending_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pending Action"
+        },
+        "story": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoryArtifact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "format_proposal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FormatProposal"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "storyboard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoryboardArtifact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/Issue"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/Event"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "versions": {
+          "items": {
+            "$ref": "#/$defs/ArtifactVersion"
+          },
+          "title": "Versions",
+          "type": "array"
+        },
+        "approvals": {
+          "items": {
+            "$ref": "#/$defs/Approval"
+          },
+          "title": "Approvals",
+          "type": "array"
+        },
+        "evaluations": {
+          "items": {
+            "$ref": "#/$defs/EvaluationArtifact"
+          },
+          "title": "Evaluations",
+          "type": "array"
+        },
+        "generation_ready": {
+          "const": false,
+          "default": false,
+          "title": "Generation Ready",
+          "type": "boolean"
+        },
+        "creative_quality_verified": {
+          "const": false,
+          "default": false,
+          "title": "Creative Quality Verified",
+          "type": "boolean"
+        },
+        "technical_review_complete": {
+          "default": false,
+          "title": "Technical Review Complete",
+          "type": "boolean"
+        },
+        "retry_available": {
+          "default": false,
+          "title": "Retry Available",
+          "type": "boolean"
+        },
+        "engine": {
+          "const": "langgraph_sqlite",
+          "default": "langgraph_sqlite",
+          "title": "Engine",
+          "type": "string"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "revision",
+        "created_at",
+        "idea",
+        "input_kind",
+        "status",
+        "current_stage",
+        "current_role",
+        "summary",
+        "provider",
+        "capabilities",
+        "limitations"
+      ],
+      "title": "Run",
+      "type": "object"
+    },
+    "SeriesPackage": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "direction": {
+          "title": "Direction",
+          "type": "string"
+        },
+        "editorial_filters": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Editorial Filters",
+          "type": "array"
+        },
+        "supported_formats": {
+          "items": {
+            "enum": [
+              "single_panel",
+              "multi_panel"
+            ],
+            "type": "string"
+          },
+          "title": "Supported Formats",
+          "type": "array"
+        },
+        "approval_status": {
+          "enum": [
+            "synthetic_fixture",
+            "pending",
+            "approved"
+          ],
+          "title": "Approval Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "version",
+        "direction",
+        "editorial_filters",
+        "supported_formats",
+        "approval_status"
+      ],
+      "title": "SeriesPackage",
+      "type": "object"
+    },
+    "SourceVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "artifact_id",
+        "version",
+        "role"
+      ],
+      "title": "SourceVersion",
+      "type": "object"
+    },
+    "StoryArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "content_id": {
+          "title": "Content Id",
+          "type": "string"
+        },
+        "source_versions": {
+          "items": {
+            "$ref": "#/$defs/SourceVersion"
+          },
+          "title": "Source Versions",
+          "type": "array"
+        },
+        "understanding": {
+          "title": "Understanding",
+          "type": "string"
+        },
+        "premise": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "title": "Premise",
+          "type": "string"
+        },
+        "narrative_intent": {
+          "title": "Narrative Intent",
+          "type": "string"
+        },
+        "beats": {
+          "items": {
+            "$ref": "#/$defs/Beat"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Beats",
+          "type": "array"
+        },
+        "payoff": {
+          "title": "Payoff",
+          "type": "string"
+        },
+        "feedback_applied": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Feedback Applied",
+          "type": "array"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "fixture": {
+          "title": "Fixture",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "version",
+        "project_id",
+        "content_id",
+        "source_versions",
+        "understanding",
+        "premise",
+        "narrative_intent",
+        "beats",
+        "payoff",
+        "provider",
+        "fixture"
+      ],
+      "title": "StoryArtifact",
+      "type": "object"
+    },
+    "StoryboardArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "content_id": {
+          "title": "Content Id",
+          "type": "string"
+        },
+        "source_versions": {
+          "items": {
+            "$ref": "#/$defs/SourceVersion"
+          },
+          "title": "Source Versions",
+          "type": "array"
+        },
+        "story_version": {
+          "title": "Story Version",
+          "type": "string"
+        },
+        "format_version": {
+          "title": "Format Version",
+          "type": "string"
+        },
+        "panels": {
+          "items": {
+            "$ref": "#/$defs/Panel"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Panels",
+          "type": "array"
+        },
+        "feedback_applied": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Feedback Applied",
+          "type": "array"
+        },
+        "usable_storyboard": {
+          "const": false,
+          "title": "Usable Storyboard",
+          "type": "boolean"
+        },
+        "fixture": {
+          "title": "Fixture",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "version",
+        "project_id",
+        "content_id",
+        "source_versions",
+        "story_version",
+        "format_version",
+        "panels",
+        "usable_storyboard",
+        "fixture"
+      ],
+      "title": "StoryboardArtifact",
+      "type": "object"
+    },
+    "Thumbnail": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "developer_text_fixture",
+          "title": "Kind",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "usable_storyboard": {
+          "const": false,
+          "title": "Usable Storyboard",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "description",
+        "usable_storyboard"
+      ],
+      "title": "Thumbnail",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "$ref": "#/$defs/Project"
+    },
+    "run": {
+      "$ref": "#/$defs/Run"
+    },
+    "action": {
+      "$ref": "#/$defs/ActionInput"
+    }
+  },
+  "required": [
+    "project",
+    "run",
+    "action"
+  ],
+  "title": "StudioSchema",
+  "type": "object"
+}
