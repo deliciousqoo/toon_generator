@@ -26,6 +26,6 @@
 
 이 흐름의 완료는 선택한 구성의 캐릭터 시트에 대한 확인이다. 작품 제작·게시나 권리 검수를 자동 승인하는 동작은 아니다. 최초 화면 검증은 기존 가상 캐릭터로 수행한다. 이미지 원본과 실제 프로젝트 데이터는 Git에 넣지 않는다.
 
-최종 확인된 시트도 실제 이야기 worker에 자동 투입하지 않는다. 이야기 단계가 이 정확한 캐릭터 묶음을 모든 역할에 고정해서 전달하도록 연결하는 작업은 다음 단위다. 이전 `?storyFixture=1` 기술 경로는 계속 합성 자료만 사용한다.
+최종 확인 뒤 **이야기·콘티**에서 에피소드를 시작할 수 있다. D-0039의 [이야기·콘티 흐름](character-episode-guide.md)은 이 정확한 캐릭터 묶음을 고정해서 모든 역할에 전달한다. 이전 `?storyFixture=1` 기술 경로는 계속 합성 자료만 사용한다.
 
 연결 근거: [SIWC의 이미지 생성 제한](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations). API 계약은 [character-visual-api.md](contracts/character-visual-api.md), 실제 검증 결과는 [구현 검증 기록](studio-implementation-validation.md)을 따른다.

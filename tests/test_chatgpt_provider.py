@@ -1,5 +1,6 @@
 """The subscription inference adapter is exercised with mock HTTP only."""
 import asyncio
+import base64
 import json
 import time
 
@@ -8,8 +9,18 @@ import pytest
 
 from backend.character_contracts import DirectionFields
 from backend.chatgpt_auth import ChatGPTAuthError
-from backend.chatgpt_provider import (MAX_BODY_BYTES, RESPONSES_URL, ChatGPTCharacterProvider,
+from backend.chatgpt_provider import (MAX_BODY_BYTES, MAX_STREAM_BYTES, MAX_SOURCE_EVENTS, RESPONSES_URL, ChatGPTCharacterProvider,
                                       ChatGPTProviderError, ChatGPTUsageStopped)
+
+
+def episode_image_url():
+    # A real, high-entropy PNG exceeds the text-only request cap after encoding.
+    import io
+    import random
+    from PIL import Image
+    output = io.BytesIO()
+    Image.frombytes("RGB", (512, 512), random.Random(1).randbytes(512 * 512 * 3)).save(output, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(output.getvalue()).decode("ascii")
 
 
 class FakeAuth:
@@ -689,6 +700,81 @@ def test_request_and_response_size_limits_stop_without_partial_commit():
     assert error.value.code == "chatgpt_response_too_large" and len(calls) == 1
 
 
+@pytest.mark.parametrize("headers", [{}, {"content-type": "text/event-stream"}])
+def test_large_sse_envelopes_keep_small_verified_structured_output(headers):
+    payload = draft_payload()
+    text = json.dumps(payload, ensure_ascii=False)
+    source = {"output_index": 0, "content_index": 0, "item_id": "synthetic-item"}
+    # Each short event is legal. Token envelopes and reasoning transport together
+    # exceed the former 512 KiB wire limit while the actual JSON stays tiny.
+    events = [{"type": "response.reasoning_text.delta", "delta": "x" * 2048} for _ in range(140)]
+    events += [{"type": "response.output_text.delta", **source, "delta": char, "transport_metadata": "x" * 2048} for char in text]
+    events += finalized_events(payload)[2:]
+    body = stream_events(events)
+    assert MAX_BODY_BYTES < len(body.encode()) < MAX_STREAM_BYTES
+    provider, auth, calls = adapter(body, headers=headers)
+    assert provider.draft(context()) == payload
+    assert len(calls) == 1 and auth.stop_code is None
+
+
+@pytest.mark.parametrize("headers", [{}, {"content-type": "text/event-stream"}])
+def test_sse_wire_has_its_own_finite_limit(headers):
+    packet = ":" + "x" * 1020 + "\n\n"
+    body = packet * (MAX_STREAM_BYTES // len(packet) + 1)
+    provider, auth, calls = adapter(body, headers=headers)
+    with pytest.raises(ChatGPTProviderError) as error:
+        provider.draft(context())
+    assert error.value.code == "chatgpt_response_too_large"
+    assert error.value.diagnostic_hint == "size_limit=stream"
+    assert len(calls) == 1 and auth.stop_code is None
+
+
+@pytest.mark.parametrize("kind,text_key,bound", [
+    ("response.output_text.delta", "delta", "delta_text"),
+    ("response.output_text.done", "text", "done_text"),
+])
+def test_many_small_events_cannot_exceed_retained_text_limit(kind, text_key, bound):
+    packet = event({"type": kind, text_key: "x" * 8192})
+    body = packet * (MAX_BODY_BYTES // 8192 + 1)
+    provider, auth, calls = adapter(body)
+    with pytest.raises(ChatGPTProviderError) as error:
+        provider.draft(context())
+    assert error.value.code == "chatgpt_response_too_large"
+    assert error.value.diagnostic_hint == "size_limit=" + bound
+    assert len(calls) == 1 and auth.stop_code is None
+
+
+def test_repeated_done_items_cannot_expand_retained_source_unboundedly():
+    body = event({"type": "response.output_item.done", "output_index": 0,
+        "item": {"type": "reasoning", "id": "synthetic-reasoning", "encrypted_content": "x" * (MAX_BODY_BYTES // 3)}}) * 4
+    provider, _, calls = adapter(body)
+    with pytest.raises(ChatGPTProviderError) as error:
+        provider.draft(context())
+    assert error.value.code == "chatgpt_response_too_large"
+    assert error.value.diagnostic_hint == "size_limit=done_items" and len(calls) == 1
+
+
+def test_empty_text_fragments_cannot_expand_source_event_count_unboundedly():
+    body = event({"type": "response.output_text.delta", "delta": ""}) * (MAX_SOURCE_EVENTS + 1)
+    provider, _, calls = adapter(body)
+    with pytest.raises(ChatGPTProviderError) as error:
+        provider.draft(context())
+    assert error.value.code == "chatgpt_response_too_large"
+    assert error.value.diagnostic_hint == "size_limit=source_events" and len(calls) == 1
+
+
+def test_usage_stop_after_large_safe_envelopes_latches_without_retry_or_partial_output():
+    body = (":" + "x" * 1020 + "\n\n") * 600
+    body += event({"type": "response.failed", "response": {"error": {"code": "subscription_sharing_usage_limit_exceeded"}}})
+    provider, auth, calls = adapter(body)
+    with pytest.raises(ChatGPTUsageStopped):
+        provider.draft(context())
+    assert auth.stop_code == "subscription_sharing_usage_limit_exceeded"
+    with pytest.raises(ChatGPTUsageStopped):
+        provider.draft(context())
+    assert len(calls) == 1
+
+
 def test_deadline_and_transport_timeout_do_not_retry():
     calls = []
 
@@ -783,3 +869,68 @@ def test_budget_clock_is_checked_while_consuming_the_response():
     with pytest.raises(ChatGPTProviderError) as error:
         provider.draft(context())
     assert error.value.code == "chatgpt_timeout" and len(calls) == 1
+
+
+def test_episode_structured_request_sends_exact_inline_sheet_with_same_oauth_transport(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-be-used")
+    provider, auth, calls = adapter(completed({"appearance": "확정 캐릭터"}))
+    image = episode_image_url()
+    ctx = {"project_id": "project-fictional", "snapshot_fingerprint": "a" * 64,
+           "_execution_identity": auth.identity_key()}
+    result = provider.call_structured("story_designer", ctx, DirectionFields,
+                                      "Keep the exact character snapshot.", image_inputs=[image])
+    assert result["appearance"] == "확정 캐릭터" and len(calls) == 1
+    request = calls[0]
+    payload = json.loads(request.content)
+    assert len(request.content) > MAX_BODY_BYTES
+    assert str(request.url) == RESPONSES_URL
+    assert request.headers["authorization"] == "Bearer synthetic-oauth-token"
+    assert set(payload) == {"model", "instructions", "input", "stream", "store"}
+    assert payload["model"] == auth.model and payload["store"] is False and payload["stream"] is True
+    parts = payload["input"][0]["content"]
+    assert parts[1] == {"type": "input_image", "image_url": image, "detail": "auto"}
+    assert json.loads(parts[0]["text"])["context"] == {key: value for key, value in ctx.items() if not key.startswith("_")}
+    assert "episode-development" in payload["instructions"] and "same_oauth" not in payload
+    assert "must-not-be-used" not in request.content.decode()
+
+
+@pytest.mark.parametrize("images", [
+    ["https://example.invalid/private.png"], ["file:///private.png"], ["C:/private.png"],
+    ["data:image/svg+xml;base64,PHN2Zz4="], ["data:image/png;base64,!!!"],
+    ["data:image/png;base64,bm90LXBuZw=="], [None], "not-a-list", ["x"] * 17,
+])
+def test_episode_image_input_never_follows_urls_or_reads_paths(images):
+    provider, _, calls = adapter(completed({"appearance": "fictional"}))
+    with pytest.raises(ChatGPTProviderError) as error:
+        provider.call_structured("story_designer", {}, DirectionFields, "Test", image_inputs=images)
+    assert error.value.code == "chatgpt_invalid_image_input" and calls == []
+
+
+def test_episode_input_limits_do_not_expand_the_response_limit(monkeypatch):
+    monkeypatch.setattr("backend.chatgpt_provider.MAX_EPISODE_INPUT_BYTES", 1000)
+    provider, _, calls = adapter(completed({"appearance": "fictional"}))
+    with pytest.raises(ChatGPTProviderError):
+        provider.call_structured("story_designer", {}, DirectionFields, "Test", image_inputs=[episode_image_url()])
+    assert calls == []
+    monkeypatch.undo()
+    provider, _, calls = adapter(b":" + b"x" * (MAX_BODY_BYTES + 1))
+    with pytest.raises(ChatGPTProviderError) as error:
+        provider.call_structured("story_designer", {}, DirectionFields, "Test")
+    assert error.value.code == "chatgpt_response_too_large" and len(calls) == 1
+
+
+def test_episode_uses_the_shared_usage_stop_and_never_falls_back_or_retries():
+    provider, auth, calls = adapter(json.dumps({"error": {"code": "subscription_sharing_usage_limit_exceeded"}}), status=429)
+    for _ in range(2):
+        with pytest.raises(ChatGPTUsageStopped):
+            provider.call_structured("story_designer", {}, DirectionFields, "Test")
+    assert auth.stop_code == "subscription_sharing_usage_limit_exceeded" and len(calls) == 1
+
+
+def test_episode_model_identity_change_discards_completed_result():
+    auth = FakeAuth()
+    provider, _, calls = adapter(completed({"appearance": "fictional"}), auth=auth,
+                                  inspect=lambda _: setattr(auth, "identity", "different-login-or-model"))
+    with pytest.raises(ChatGPTProviderError) as error:
+        provider.call_structured("story_designer", {"_execution_identity": auth.identity_key()}, DirectionFields, "Test")
+    assert error.value.code == "chatgpt_identity_changed" and len(calls) == 1

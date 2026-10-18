@@ -15,6 +15,7 @@ interface CharacterWorkspaceProps {
   onStateChange?: (state: CharacterState) => void;
   connectionStatus?: ChatGPTConnectionStatus | null;
   onConnectionNeeded?: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 interface BriefFields {
@@ -64,7 +65,7 @@ function versionLabel(version: string): string {
   return `v${version}`;
 }
 
-export default function CharacterWorkspace({ projectId, initialDraft = '', onStateChange, connectionStatus, onConnectionNeeded }: CharacterWorkspaceProps) {
+export default function CharacterWorkspace({ projectId, initialDraft = '', onStateChange, connectionStatus, onConnectionNeeded, onBusyChange }: CharacterWorkspaceProps) {
   const [state, setState] = useState<CharacterState | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -83,9 +84,13 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
   const chatLog = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const changeHandler = useRef(onStateChange);
+  const busyHandler = useRef(onBusyChange);
   const startingDraft = useRef(initialDraft);
   const initialDraftRecovery = useRef({ text: initialDraft.trim(), active: Boolean(initialDraft.trim()) });
   changeHandler.current = onStateChange;
+  busyHandler.current = onBusyChange;
+
+  useEffect(() => { busyHandler.current?.(loading || busy || visualBusy); }, [loading, busy, visualBusy]);
 
   useEffect(() => {
     const controller = new AbortController();

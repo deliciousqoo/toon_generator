@@ -112,6 +112,8 @@ def create_app(data_root=None, *, port=8765, dev=False, character_fixture=False,
     provider = DeterministicCharacterProvider() if character_fixture else ChatGPTCharacterProvider(auth)
     try:
         studio_router = create_studio_router(store.root, character_provider=provider)
+        from .episode_router import create_episode_router
+        episode_router = create_episode_router(store.root, studio_router.characters)
     except Exception:
         auth.close()
         raise
@@ -122,20 +124,25 @@ def create_app(data_root=None, *, port=8765, dev=False, character_fixture=False,
             yield
         finally:
             try:
-                studio_router.characters.close()
+                episode_router.service.close()
             finally:
                 try:
-                    studio_router.service.close()
+                    studio_router.characters.close()
                 finally:
-                    auth.close()
+                    try:
+                        studio_router.service.close()
+                    finally:
+                        auth.close()
 
     app = FastAPI(title="Toon Studio local", version=APP_VERSION, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store, app.state.studio = store, studio
     app.state.workflow_studio = studio_router.service
     app.state.character_studio = studio_router.characters
+    app.state.episode_studio = episode_router.service
     app.state.chatgpt_auth = auth
     app.include_router(studio_router)
+    app.include_router(episode_router)
     app.include_router(create_chatgpt_router(auth, port=port, fixture=character_fixture))
     token = secrets.token_urlsafe(32)
     ports = {port} | ({5173} if dev else set())

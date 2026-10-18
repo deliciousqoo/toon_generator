@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowRight, LoaderCircle, Plus } from 'lucide-react';
 import CharacterWorkspace from './CharacterWorkspace';
+import EpisodeWorkspace from './EpisodeWorkspace';
 import ChatGPTConnection from './ChatGPTConnection';
 import { getCharacterState, hasAppliedCharacterMessage, hasAppliedCharacterTurn, submitCharacterTurn } from './characterApi';
 import { canUseChatGPT, isChatGPTUsageLimit, safeConnectionUrl } from './chatgptApi';
 import type { ChatGPTConnectionStatus } from './chatgptApi';
 import { createCharacterProject, initializeStudio } from './studioApi';
 import type { StudioProject } from './studioTypes';
+import type { CharacterState } from './characterTypes';
 import './studioEntry.css';
 
 export default function StudioWorkspace() {
@@ -23,10 +25,18 @@ export default function StudioWorkspace() {
   const [reload, setReload] = useState(0);
   const [connectionStatus, setConnectionStatus] = useState<ChatGPTConnectionStatus | null>(null);
   const [connectionOpen, setConnectionOpen] = useState(false);
+  const [character, setCharacter] = useState<CharacterState | null>(null);
+  const [workspace, setWorkspace] = useState<'character' | 'episode'>('character');
+  const [characterBusy, setCharacterBusy] = useState(false);
+  const [episodeBusy, setEpisodeBusy] = useState(false);
   const lock = useRef(false);
   const connectionReady = canUseChatGPT(connectionStatus);
   const usageUrl = safeConnectionUrl(connectionStatus?.manage_usage_url);
   const usageStopped = isChatGPTUsageLimit(connectionStatus);
+  const workspaceBusy = characterBusy || episodeBusy;
+  const controlsLocked = busy || loading || workspaceBusy;
+
+  useEffect(() => { setCharacter(null); setWorkspace('character'); setCharacterBusy(false); setEpisodeBusy(false); }, [projectId]);
 
   useEffect(() => {
     let current = true;
@@ -87,11 +97,11 @@ export default function StudioWorkspace() {
     <header className="character-app-header with-chatgpt">
       <span className="character-app-brand">Toon Studio</span>
       <div className="character-app-projects">
-        {projects.length > 0 && <select aria-label="프로젝트 선택" value={projectId} disabled={busy || loading}
+        {projects.length > 0 && <select aria-label="프로젝트 선택" value={projectId} disabled={controlsLocked}
           onChange={event => { setProjectId(event.target.value); setCreating(false); setInitialDraft(''); setError(''); }}>
           {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
         </select>}
-        {projects.length > 0 && <button type="button" className="character-app-new" disabled={busy || loading}
+        {projects.length > 0 && <button type="button" className="character-app-new" disabled={controlsLocked}
           onClick={() => { setCreating(true); setError(''); }}><Plus size={16} aria-hidden="true" />새 프로젝트</button>}
         <ChatGPTConnection open={connectionOpen} onOpenChange={setConnectionOpen} onStatusChange={setConnectionStatus} />
       </div>
@@ -101,8 +111,8 @@ export default function StudioWorkspace() {
         {connectionStatus?.blocked && usageUrl ? <a className="character-usage-link" href={usageUrl} target="_blank" rel="noopener noreferrer">사용량 관리</a> : null}
         {loading || projects.length === 0 ? <button type="button" disabled={busy} onClick={() => setReload(value => value + 1)}>다시 불러오기</button>
           : <button type="button" onClick={() => setError('')}>닫기</button>}</div>}
-      {loading ? <p className="character-app-loading" role="status"><LoaderCircle size={18} aria-hidden="true" />불러오는 중</p>
-        : creating ? <section className="character-start" aria-labelledby="character-start-title">
+      {loading ? <p className="character-app-loading" role="status"><LoaderCircle size={18} aria-hidden="true" />불러오는 중</p> : null}
+      {!loading && creating ? <section className="character-start" aria-labelledby="character-start-title">
           <div className="character-start-heading"><span className="character-app-mode">{connectionStatus?.fixture ? '합성 테스트' : connectionReady ? 'ChatGPT 구독 사용 중' : 'ChatGPT 연결 필요'}</span><h1 id="character-start-title">어떤 캐릭터를 만들까요?</h1></div>
           <form onSubmit={start}>
             <label className="character-start-name">프로젝트 이름 <span>선택</span><input value={name} maxLength={120} disabled={busy}
@@ -117,8 +127,13 @@ export default function StudioWorkspace() {
               </button>
             </div>
           </form>
-        </section> : projectId ? <CharacterWorkspace key={projectId} projectId={projectId} initialDraft={initialDraft} connectionStatus={connectionStatus}
-          onConnectionNeeded={() => setConnectionOpen(true)} onStateChange={() => window.dispatchEvent(new Event('chatgpt-status-changed'))} /> : null}
+        </section> : null}
+      {!loading && projectId ? <div key={projectId} hidden={creating}>
+          <nav className="character-flow-tabs" aria-label="프로젝트 작업"><button type="button" aria-pressed={workspace === 'character'} disabled={workspaceBusy} onClick={() => setWorkspace('character')}>캐릭터</button><button type="button" aria-pressed={workspace === 'episode'} disabled={workspaceBusy || (!character?.sheet_approved && workspace !== 'episode')} onClick={() => setWorkspace('episode')}>이야기·콘티<ArrowRight size={13} aria-hidden="true" /></button></nav>
+          <div className="character-flow-panel" hidden={workspace !== 'character'}><CharacterWorkspace projectId={projectId} initialDraft={initialDraft} connectionStatus={connectionStatus}
+            onConnectionNeeded={() => setConnectionOpen(true)} onStateChange={value => { setCharacter(value); window.dispatchEvent(new Event('chatgpt-status-changed')); }} onBusyChange={setCharacterBusy} /></div>
+          <div className="character-flow-panel" hidden={workspace !== 'episode'}><EpisodeWorkspace projectId={projectId} character={character} active={workspace === 'episode'} connectionStatus={connectionStatus} onConnectionNeeded={() => setConnectionOpen(true)} onBusyChange={setEpisodeBusy} /></div>
+        </div> : null}
     </main>
   </div>;
 }
