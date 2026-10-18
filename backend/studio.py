@@ -8,7 +8,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -374,7 +374,7 @@ class StudioService:
         builder.add_conditional_edges("board_evaluator", lambda s: s["route"], {"board": "board", "board_review": "board_review"})
         return builder.compile(checkpointer=self.checkpointer)
 
-    def create_project(self, request: ProjectBrief):
+    def create_project(self, request: ProjectBrief, *, character_first=False):
         pid = new_id("project")
         sources = [{"project_id": pid, "artifact_id": f"{pid}-{role}", "version": "1.0.0", "role": role}
                    for role in ("project_brief", "reference_fixture", "character_fixture", "series_fixture")]
@@ -382,6 +382,19 @@ class StudioService:
             "references": [{"id": f"{pid}-reference_fixture", "project_id": pid, "version": "1.0.0", "purpose": "story", "observations": ["개발용 합성 입력만 사용"], "not_to_copy": ["실제 작품·캐릭터·브랜드"], "permission_status": "synthetic_fixture"}],
             "character_package": {"id": f"{pid}-character_fixture", "project_id": pid, "version": "1.0.0", "identity_invariants": ["이름 없는 합성 주인공"], "behavior_and_voice": ["개발용 행동·목소리 fixture"], "sheet_artifact_id": f"{pid}-sheet-fixture", "sheet_status": "fixture", "approval_status": "synthetic_fixture"},
             "series_package": {"id": f"{pid}-series_fixture", "project_id": pid, "version": "1.0.0", "direction": request.series_direction, "editorial_filters": ["합성 기술 검증"], "supported_formats": ["single_panel", "multi_panel"], "approval_status": "synthetic_fixture"}}).model_dump()
+        if character_first:
+            # Character direction is developed in its own durable conversation.
+            # Never count an injected engineering fixture as an approved sheet.
+            project["fixture_versions"] = sources[:1]
+            project["references"] = []
+            project["character_package"] = {
+                "id": f"{pid}-character", "project_id": pid, "version": "1.0.0",
+                "identity_invariants": [], "behavior_and_voice": [],
+                "sheet_artifact_id": "", "sheet_status": "missing", "approval_status": "pending",
+                "conversation_history": [], "revision_history": [], "source_versions": [],
+            }
+            project["series_package"]["approval_status"] = "pending"
+            project = Project.model_validate(project).model_dump()
         with self._db_lock:
             self.db.execute("INSERT INTO projects VALUES(?,?)", (pid, self._dump(project)))
             self.db.commit()
@@ -430,7 +443,10 @@ class StudioService:
         return [self.get_run(pid, rid) for rid in ids]
 
     def create_run(self, pid, request: RunInput):
-        self.get_project(pid)
+        project = self.get_project(pid)
+        character = project["character_package"]
+        if character["sheet_status"] != "fixture" or character["approval_status"] != "synthetic_fixture":
+            raise StudioConflict("캐릭터 시트를 완성하고 확인한 뒤 이야기를 시작할 수 있습니다.")
         rid = new_id("run")
         run = Run(id=rid, project_id=pid, revision=1, created_at=now(), **request.model_dump(), status="queued", current_stage="story",
             current_role="orchestrator", summary="이야기 작업을 준비하고 있습니다.", provider=self.provider.name,
@@ -588,9 +604,24 @@ class StudioService:
 
 
 def create_studio_router(root: Path):
+    from pydantic import BaseModel, ConfigDict, Field
+    from .character_contracts import TurnRequest, DirectionDecisionRequest
+    from .character_service import CharacterService, CharacterConflict, CharacterNotFound
+
     service = StudioService(root)
+    try:
+        characters = CharacterService(root)
+    except Exception:
+        service.close()
+        raise
     router = APIRouter(prefix="/api/studio")
     router.service = service
+    router.characters = characters
+
+    class CharacterProjectInput(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        name: str = Field(default="새 캐릭터", min_length=1, max_length=120)
+        synthetic_confirmed: Literal[True]
 
     def call(function, *args):
         try:
@@ -609,6 +640,40 @@ def create_studio_router(root: Path):
     @router.post("/projects", status_code=201)
     def create_project(request: ProjectBrief):
         return service.create_project(request)
+
+    @router.post("/character-projects", status_code=201)
+    def character_project(request: CharacterProjectInput):
+        selected = service.create_project(ProjectBrief(name=request.name, audience="", series_direction="미정", synthetic_confirmed=True), character_first=True)
+        characters.ensure_project(selected["id"])
+        return selected
+
+    def character_call(pid, method, *args):
+        call(service.get_project, pid)
+        try:
+            characters.ensure_project(pid)
+            return method(pid, *args)
+        except CharacterNotFound:
+            raise HTTPException(404, "현재 프로젝트의 캐릭터 대화를 찾을 수 없습니다.") from None
+        except CharacterConflict as error:
+            raise HTTPException(409, str(error)) from None
+        except ValueError:
+            raise HTTPException(409, "캐릭터 작업을 처리하지 못했습니다. 입력과 현재 결과를 확인해 주세요.") from None
+
+    @router.get("/projects/{pid}/character")
+    def character_state(pid: str):
+        return character_call(pid, characters.get_state)
+
+    @router.post("/projects/{pid}/character/turns")
+    def character_turn(pid: str, request: TurnRequest):
+        return character_call(pid, characters.submit_turn, request.model_dump())
+
+    @router.post("/projects/{pid}/character/confirm")
+    def character_confirm(pid: str, request: DirectionDecisionRequest):
+        return character_call(pid, characters.confirm_direction, request.model_dump())
+
+    @router.post("/projects/{pid}/character/reopen")
+    def character_reopen(pid: str, request: DirectionDecisionRequest):
+        return character_call(pid, characters.reopen_direction, request.model_dump())
 
     @router.get("/projects/{pid}")
     def project(pid: str):

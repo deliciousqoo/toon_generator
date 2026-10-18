@@ -4,6 +4,8 @@
 
 This repository defines a personal, local-first workspace for the Instagram toon pipeline. The existing Stage 01–05 synthetic/mock prototype is retained as a legacy baseline. The user resumed implementation on 2026-10-14 (D-0035). Build the revised Stage 04 synthetic technical slice under `docs/p0-implementation-baseline.md`, with the product journey in `docs/product-direction-revision.md`. Real project/content production remains separately gated.
 
+The user authorized the character-first revision on 2026-10-18 (D-0036), based on the feedback of 2026-10-16. New projects start with a character conversation, direction review, visual candidates and a character sheet before episode work. Implement each UI/worker/persistence/revision slice together and show it in preview promptly. Keep the ordinary interface limited to the current result, conversation, step and necessary actions. The first slice is `docs/character-direction-guide.md`; it implements direction review, not visual candidate or sheet completion. Existing Stage 04 fixtures remain an explicit technical path at `?storyFixture=1`. Actual provider execution still requires its concrete P1 scope; never count a direction confirmation as sheet approval.
+
 ## Source of truth and authority
 
 1. Approved specifications, character/account bibles, and recorded decisions are the source of truth.

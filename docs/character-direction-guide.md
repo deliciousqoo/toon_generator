@@ -1,0 +1,29 @@
+# 캐릭터 대화 첫 구현
+
+기준일: 2026-10-18. 범위: D-0036의 캐릭터 방향 대화·수정·저장 기술 슬라이스. 현재 기본 모드는 `테스트 · AI 미연결`이며 가상의 재료로 사용한다. 방향 카드를 캐릭터 시트로 표시하거나 시트 승인으로 사용하지 않는다.
+
+## 진행
+
+1. 기본 주소를 연다. 프로젝트 이름은 선택 사항이며 첫 가상 캐릭터의 외형/특징을 자유롭게 입력하고 **대화 시작**을 누른다.
+2. 대화의 현재 질문에 성격·원하는 느낌을 하나씩 답한다. 오른쪽 방향 카드에 전달한 정보가 반영된다. 테스트 worker는 현재 질문에 해당하는 칸에 입력을 보존하며 자연어를 의미적으로 해석하는 LLM이 아니다.
+3. 이미 정한 항목을 바꾸려면 **반영할 항목**에서 외형/성격/느낌/말투를 선택해 대화로 입력하거나 **직접 수정**을 사용한다. 다른 항목은 보존되고 새 버전이 생긴다. 모호한 일반 의견은 대화에 남으며 임의의 설정 변경으로 추정하지 않는다.
+4. 필수 방향이 정리되면 **방향 확인하고 다음으로**를 누른다. 확인한 정확 버전을 저장하고 **시각 후보 연결 대기**로 이동한다. 이미지 후보·시트 생성은 다음 구현 단위다.
+5. **캐릭터 방향 수정**으로 돌아와 수정하고 다시 확인할 수 있다. 새로고침/앱 재시작 후 같은 프로젝트를 열면 대화·현재 방향·이전 버전·확인 기록이 복구된다.
+
+화면에는 현재 단계·결과·대화·필요 행동을 우선 표시하고, 긴 제품 설명과 전체 기술 로그를 두지 않는다. 작업 모드는 작은 배지로 표시한다. 외형·성격·원하는 느낌은 한 번에 모두 채우는 시작 폼 대신 대화로 순차 보완한다. 말투·고정 특징·제외 요소는 선택 사항이다.
+
+## 내부 구조
+
+- API: `POST /api/studio/character-projects`, `GET /api/studio/projects/{pid}/character`, `POST .../turns`, `.../confirm`, `.../reopen`.
+- 새 프로젝트는 `sheet_status=missing`, `approval_status=pending`이며 합성 주인공 fixture를 주입하지 않는다. 시트가 없으면 이야기 실행 API도 409로 막는다.
+- LangGraph: designer → deterministic validator → independent evaluator → human review interrupt. 확인 응답은 정확 버전으로 재개한다. worker 역할은 분리하되 사용자 대화 창은 하나다.
+- SQLite: 데이터 루트의 `studio/character/directions.sqlite3`에 상태·요청·불변 버전·제공자 호출 한도를, `checkpoints.sqlite3`에 그래프 중간 상태를 저장한다.
+- 요청 ID로 중복 응답을 재생하고 revision/version 충돌을 차단한다. 모델/계약/프로젝트가 맞지 않는 미완료 복구 작업은 제공자를 호출하기 전에 격리한다.
+- 출력의 `visual_ready`, `sheet_approved`는 항상 false다. 시각 후보·이미지 레퍼런스 업로드·실제 시트·전체 v2 백업은 이번에 완성한 기능이 아니다.
+- 기존 Stage04 합성 자료는 `?storyFixture=1`, v1 자료는 `?legacy=1`에서 보존한다. 별도 기술 테스트에서만 기존 fixture를 사용한다.
+
+## 선택적 Ollama 코드 경로
+
+기본은 오프라인 fixture이며 실제 모델 호출은 수행하지 않았다. 별도 실행 범위가 구체화된 경우에만 `TOON_CHARACTER_ENABLE_OLLAMA=1`, `TOON_CHARACTER_OLLAMA_MODEL`, `TOON_CHARACTER_PROVIDER_APPROVAL_FILE`을 사용한다. `docs/contracts/character-provider-approval.example.json`은 비활성 예시다. Stage04용 환경 변수/승인 파일은 캐릭터 실행에 적용되지 않는다.
+
+이 경로는 `synthetic_character_direction`, 정확한 모델·역할·loopback endpoint·기한·호출/시간 한도가 필요하다. loopback은 실제 모델의 추론 위치나 외부 위임 여부를 증명하지 않는다. 실행 승인 파일·키·모델 가중치는 Git에 넣지 않는다. OpenAI 모델은 권고안만 조사했으며 이 첫 구현에는 OpenAI 어댑터가 없다.

@@ -42,6 +42,9 @@ export async function initializeStudio(): Promise<StudioProject[]> {
 export function createStudioProject(input: StudioProjectInput): Promise<StudioProject> {
   return studioRequest('/projects', { method: 'POST', body: input });
 }
+export function createCharacterProject(name: string): Promise<StudioProject> {
+  return studioRequest('/character-projects', { method: 'POST', body: { name: name.trim() || '새 캐릭터', synthetic_confirmed: true } });
+}
 export function getStudioProject(id: string, signal?: AbortSignal): Promise<StudioProjectSnapshot> {
   return studioRequest(`/projects/${encodeURIComponent(id)}`, { signal });
 }

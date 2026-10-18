@@ -111,12 +111,16 @@ def create_app(data_root=None, *, port=8765, dev=False):
         try:
             yield
         finally:
-            studio_router.service.close()
+            try:
+                studio_router.characters.close()
+            finally:
+                studio_router.service.close()
 
     app = FastAPI(title="Toon Studio local", version=APP_VERSION, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store, app.state.studio = store, studio
     app.state.workflow_studio = studio_router.service
+    app.state.character_studio = studio_router.characters
     app.include_router(studio_router)
     token = secrets.token_urlsafe(32)
     ports = {port} | ({5173} if dev else set())

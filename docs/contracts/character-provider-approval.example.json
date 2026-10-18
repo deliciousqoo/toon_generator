@@ -1,0 +1,11 @@
+{
+  "execution_authorized": false,
+  "provider": "ollama_character_local_json",
+  "model": "EXACT_MODEL_REQUIRED",
+  "input_scope": "synthetic_character_direction",
+  "endpoint": "http://127.0.0.1:11434",
+  "allowed_roles": ["character_designer", "character_evaluator"],
+  "max_calls": 24,
+  "timeout_seconds": 30,
+  "expires_at": "EXPLICIT_FUTURE_UTC_EXPIRY_REQUIRED"
+}
