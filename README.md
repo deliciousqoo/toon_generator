@@ -2,9 +2,11 @@
 
 개인 작업용 로컬 플랫폼에서 인스타툰 프로젝트를 설정하고, 에피소드의 콘티와 이미지 초안을 만드는 AI 보조 파이프라인을 정의한다.
 
-> **캐릭터 대화와 ChatGPT 구독 연결 — 2026-10-18:** D-0036/D-0037에 따라 특징 입력 → 필요한 질문 → 방향 카드 → 수정 → 정확 버전 확인을 LangGraph·SQLite에 연결했다. 기본 캐릭터 제공자는 앱 자체의 **Sign in with ChatGPT** 연결이다. 로그인·구독 사용 동의·모델 선택 후 사용하며, 한도 도달 시 멈춘다. 유료 API 자동 전환은 없다. 캐릭터 시각 후보·실제 시트·이미지 생성은 아직 구현하지 않았다.
+> **시각 후보·시트 구현 — 2026-10-18:** D-0038에 따라 후보 비교·수정, 정확 후보 선택, 시트 구성·부분 수정과 최종 확인을 확장한다. 이미지 연결은 **Codex 이미지 생성 + 앱 반영**이며 앱 자체의 자동 이미지 생성 기능은 아니다. [후보·시트 안내](docs/character-visual-guide.md)와 [검증 기록](docs/studio-implementation-validation.md)을 참고한다.
 
-새 화면은 [구독 연결 안내](docs/chatgpt-subscription-guide.md), [캐릭터 대화 안내](docs/character-direction-guide.md), [구현 검증 기록](docs/studio-implementation-validation.md)을 참고한다. 이전 이야기 기술 테스트는 `?storyFixture=1`, Stage 01–05 프로토타입은 `?legacy=1`에서 확인한다. 실제 캐릭터 시트가 없는 새 프로젝트는 이야기 제작을 시작할 수 없다. 연결 성공 여부와 실제 대화 검증은 별도로 기록한다.
+> **캐릭터 대화와 ChatGPT 구독 연결 — 2026-10-18:** D-0036/D-0037에 따라 특징 입력 → 필요한 질문 → 방향 카드 → 수정 → 정확 버전 확인을 LangGraph·SQLite에 연결했다. 기본 캐릭터 제공자는 앱 자체의 **Sign in with ChatGPT** 연결이다. 로그인·구독 사용 동의·모델 선택 후 사용하며, 한도 도달 시 멈춘다. 유료 API 자동 전환은 없다. 이후 시각 후보·시트는 D-0038의 이미지 가져오기 흐름으로 이어진다.
+
+새 화면은 [구독 연결 안내](docs/chatgpt-subscription-guide.md), [캐릭터 대화 안내](docs/character-direction-guide.md), [후보·시트 안내](docs/character-visual-guide.md), [구현 검증 기록](docs/studio-implementation-validation.md)을 참고한다. 이전 이야기 기술 테스트는 `?storyFixture=1`, Stage 01–05 프로토타입은 `?legacy=1`에서 확인한다. 실제 캐릭터 시트와 이야기 worker의 정확 버전을 연결하는 작업은 후속 단계다. 연결 성공 여부와 실제 대화 검증은 별도로 기록한다.
 
 ## 실행
 

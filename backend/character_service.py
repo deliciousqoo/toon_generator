@@ -22,6 +22,7 @@ from pydantic import ValidationError
 from .character_contracts import (QUESTIONS, CharacterBrief, CharacterState, DirectionDecisionRequest,
                                   DirectionDraft, DirectionEvaluation, DirectionFields, TurnRequest, unknown_fields)
 from .character_workers import configured_character_provider, validate_approval, validate_direction
+from .character_visuals import CharacterVisualMixin, VisualConflict
 
 
 def now():
@@ -32,8 +33,7 @@ def dump(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-class CharacterConflict(Exception):
-    pass
+CharacterConflict = VisualConflict
 
 
 class CharacterNotFound(Exception):
@@ -49,7 +49,7 @@ class CharacterGraphState(TypedDict, total=False):
     evaluation: dict
 
 
-class CharacterService:
+class CharacterService(CharacterVisualMixin):
     def __init__(self, root: Path, provider=None):
         self.root = Path(root) / "studio" / "character"
         self.root.mkdir(parents=True, exist_ok=True)
@@ -127,6 +127,7 @@ class CharacterService:
         state = self._validated_state(json.loads(row[0]))
         if state["project_id"] != pid:
             raise CharacterConflict("저장된 캐릭터 프로젝트 경계가 맞지 않습니다.")
+        self._assert_visual_assets(state)
         return state
 
     def _operation(self, pid, request_id):
@@ -427,13 +428,14 @@ class CharacterService:
                     if snapshot.next:
                         self.graph.invoke(Command(resume={"confirm_version": request["expected_version"]}), config)
                 state.update(stage="candidates", status="confirmed", direction_confirmed=True, can_confirm=False,
-                             next_question="캐릭터 후보 이미지를 연결할 준비 단계입니다. 시각 후보와 캐릭터 시트는 아직 완성되지 않았습니다.")
+                             next_question="캐릭터 후보를 요청하고 이미지를 확인한 뒤 수정하거나 선택해 주세요.")
             else:
                 if not state["direction_confirmed"]:
                     raise CharacterConflict("확인한 캐릭터 방향만 수정 단계로 돌아갈 수 있습니다.")
                 missing = unknown_fields(state["brief"])
                 blocked = any(issue["severity"] == "blocker" for issue in state["issues"])
                 question_field = missing[0] if missing else "review"
+                self._invalidate_visual_direction(state)
                 state.update(stage="direction", direction_confirmed=False, unknowns=missing,
                              can_confirm=not missing and not blocked,
                              status="blocked" if blocked else ("awaiting_input" if missing else "awaiting_review"),

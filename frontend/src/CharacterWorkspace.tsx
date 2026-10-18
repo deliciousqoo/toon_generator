@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
-import { ArrowRight, Check, CircleAlert, Image, LoaderCircle, Pencil, RotateCcw, Send, X } from 'lucide-react';
+import { ArrowRight, Check, CircleAlert, LoaderCircle, Pencil, RotateCcw, Send, X } from 'lucide-react';
+import type { ReactNode } from 'react';
+import CharacterVisualWorkspace from './CharacterVisualWorkspace';
 import { CharacterApiError, confirmCharacterDirection, getCharacter, hasAppliedCharacterMessage, hasAppliedCharacterTurn, reopenCharacterDirection, sendCharacterTurn } from './characterApi';
 import { canUseChatGPT, isChatGPTUsageLimit, safeConnectionUrl } from './chatgptApi';
 import type { ChatGPTConnectionStatus } from './chatgptApi';
@@ -74,6 +76,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
   const [editDraft, setEditDraft] = useState<BriefFields | null>(null);
   const [editBase, setEditBase] = useState<BriefFields | null>(null);
   const [editError, setEditError] = useState('');
+  const [visualBusy, setVisualBusy] = useState(false);
   const connection = useRef<AbortController | null>(null);
   const mutationLock = useRef(false);
   const requestIdentity = useRef<{ signature: string; id: string } | null>(null);
@@ -99,6 +102,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
     setEditDraft(null);
     setEditBase(null);
     setEditError('');
+    setVisualBusy(false);
     mutationLock.current = false;
     requestIdentity.current = null;
     void getCharacter(projectId, controller.signal).then(value => {
@@ -283,7 +287,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
     if (saved) setNotice(action === 'confirm' ? '캐릭터 방향을 확인했습니다.' : '캐릭터 방향을 다시 수정할 수 있습니다.');
   }
 
-  const locked = loading || busy;
+  const locked = loading || busy || visualBusy;
   const connectionReady = canUseChatGPT(connectionStatus);
   const fixtureActive = Boolean(connectionStatus?.fixture);
   const usageStopped = isChatGPTUsageLimit(connectionStatus);
@@ -291,11 +295,12 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
   const priorFixture = state?.fixture && state.messages.length > 0 && !fixtureActive;
   const modeLabel = fixtureActive ? '합성 테스트' : priorFixture ? '이전 합성 결과' : connectionStatus?.blocked ? usageStopped ? '사용 한도 · 중단' : 'ChatGPT 연결 확인' : connectionReady ? 'ChatGPT 구독 사용 중' : connectionStatus?.connected && connectionStatus.sharing ? '모델 선택 필요' : 'ChatGPT 연결 필요';
   const confirmed = state?.direction_confirmed ?? false;
-  const currentStage = confirmed ? 1 : 0;
+  const visualStage = state?.stage || 'candidates';
+  const currentStage = confirmed ? visualStage === 'candidates' ? 1 : 2 : 0;
 
-  return <section className="character-workspace" aria-labelledby="character-title" aria-busy={loading || busy}>
+  return <section className="character-workspace" aria-labelledby="character-title" aria-busy={loading || busy || visualBusy}>
     <header className="character-heading">
-      <h1 id="character-title">{confirmed ? '캐릭터 후보' : '캐릭터부터 정해 볼까요?'}</h1>
+      <h1 id="character-title">{confirmed ? visualStage === 'complete' ? '캐릭터 시트 완성' : visualStage === 'sheet' ? '캐릭터 시트' : '캐릭터 후보' : '캐릭터부터 정해 볼까요?'}</h1>
       <span className="character-test-badge">{modeLabel}</span>
     </header>
 
@@ -319,7 +324,10 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
 
     {loading && !state ? <div className="character-loading" role="status"><LoaderCircle className="character-spin" size={19} aria-hidden="true" />캐릭터 작업을 불러오는 중입니다.</div> : null}
 
-    {state ? <div className="character-columns">
+    {state?.direction_confirmed && state.brief ? <CharacterVisualWorkspace state={state} onStateChange={setState}
+      onBusyChange={setVisualBusy} disabled={loading || busy} /> : null}
+
+    {state ? <DirectionArchive confirmed={confirmed}><div className="character-columns">
       <section className="character-conversation" aria-labelledby="character-chat-title">
         <div className="character-panel-heading"><h2 id="character-chat-title">대화</h2><span>Toon Studio</span></div>
         <div className="character-chat-log" ref={chatLog} role="log" aria-label="오케스트레이터와의 대화" aria-live="polite" aria-relevant="additions text">
@@ -374,15 +382,18 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
           </div> : null}
         </> : <div className="character-brief-empty"><span aria-hidden="true">✦</span><p>이야기한 내용이<br />캐릭터 방향으로 정리됩니다.</p></div>}
 
-        {confirmed ? <div className="character-pending">
-          <Image size={24} strokeWidth={1.4} aria-hidden="true" /><h3>시각 후보 연결 대기</h3><p>이미지 생성 연결 후 후보를 확인할 수 있습니다.</p>
+        {confirmed ? <div className="character-result-actions">
           <button type="button" className="character-button" disabled={locked} onClick={() => void decide('reopen')}><Pencil size={14} aria-hidden="true" />캐릭터 방향 수정</button>
         </div> : null}
 
         {state.versions.length > 1 ? <details className="character-history"><summary>방향 수정 기록 ({state.versions.length})</summary><ol>{[...state.versions].reverse().map(brief => <li key={brief.version}><strong>{versionLabel(brief.version)}{brief.version === state.brief?.version ? ' · 현재' : ''}</strong><BriefSummary brief={brief} compact /></li>)}</ol></details> : null}
       </section>
-    </div> : null}
+    </div></DirectionArchive> : null}
   </section>;
+}
+
+function DirectionArchive({ confirmed, children }: { confirmed: boolean; children: ReactNode }) {
+  return confirmed ? <details className="character-direction-archive"><summary>확인한 캐릭터 방향·이전 대화</summary>{children}</details> : <>{children}</>;
 }
 
 function BriefSummary({ brief, compact = false }: { brief: CharacterBrief; compact?: boolean }) {

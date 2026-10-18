@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
@@ -19,6 +20,7 @@ from langsmith import tracing_context
 
 from .studio_contracts import ActionInput, EvaluationArtifact, FormatProposal, Project, ProjectBrief, Run, RunInput
 from .studio_workers import configured_provider, evaluate_board, evaluate_story, make_board, make_story
+from .character_visuals import MAX_IMAGE_BYTES, VisualConflict
 
 
 def now():
@@ -409,7 +411,23 @@ class StudioService:
             project = Project.model_validate(json.loads(row[0]))
             if project.id != pid:
                 raise ValueError("프로젝트 등록 ID가 계약의 ID와 다릅니다.")
-            return project.model_dump()
+            result = project.model_dump()
+            characters = getattr(self, "characters", None)
+            if characters and result["character_package"]["approval_status"] != "synthetic_fixture":
+                state = characters.get_state(pid)
+                brief, visual = state["brief"], state["visuals"]
+                sheet = next((item for item in visual["sheets"] if item["version"] == visual["current_sheet_version"]), None)
+                result["character_package"].update(
+                    version=sheet["version"] if sheet else (brief["version"] if brief else "1.0.0"),
+                    identity_invariants=brief["identity_invariants"] if brief else [],
+                    behavior_and_voice=[value for value in [brief["personality"], brief["voice"]] if value] if brief else [],
+                    sheet_artifact_id=sheet["id"] if sheet else "",
+                    sheet_status="approved" if state["sheet_approved"] else ("pending" if sheet else "missing"),
+                    approval_status="approved" if state["sheet_approved"] else "pending",
+                    conversation_history=state["messages"], revision_history=visual["decisions"],
+                    source_versions=([{"project_id": pid, "artifact_id": brief["artifact_id"], "version": brief["version"], "role": "character_direction"}] if brief else [])
+                    + ([{"project_id": pid, "artifact_id": sheet["id"], "version": sheet["version"], "role": "character_sheet"}] if sheet else []))
+            return Project.model_validate(result).model_dump()
         except ValueError:
             # Stored records may include supplied material. Never expose Pydantic input details.
             raise ValueError("저장된 프로젝트 계약이 현재 앱과 호환되지 않습니다.") from None
@@ -446,12 +464,17 @@ class StudioService:
         project = self.get_project(pid)
         character = project["character_package"]
         if character["sheet_status"] != "fixture" or character["approval_status"] != "synthetic_fixture":
+            if getattr(self, "characters", None):
+                self.characters.approved_visual_package(pid)
+                # The legacy story fixture does not pin a real character package across
+                # worker nodes. Do not silently turn a sheet review into episode execution.
+                raise StudioConflict("캐릭터 시트가 확인되었습니다. 실제 캐릭터를 사용하는 이야기 연결은 다음 단계입니다.")
             raise StudioConflict("캐릭터 시트를 완성하고 확인한 뒤 이야기를 시작할 수 있습니다.")
         rid = new_id("run")
         run = Run(id=rid, project_id=pid, revision=1, created_at=now(), **request.model_dump(), status="queued", current_stage="story",
             current_role="orchestrator", summary="이야기 작업을 준비하고 있습니다.", provider=self.provider.name,
             capabilities=["역할별 실행 상태", "정확한 버전 확인", "SQLite 체크포인트 재개", "범위별 수정", "원본·수정 이력 보존"],
-            limitations=["합성 기술 검증만 허용", "전용 캐릭터 창작·시트 단계 미구현", "시각 콘티와 이미지 생성 미구현", "개발용 fixture를 완성된 AI 창작물로 승인할 수 없음", "v2 작업의 암호화 백업·멀티 PC 이동 미구현"]).model_dump()
+            limitations=["합성 기술 검증만 허용", "실제 캐릭터의 이야기 연결은 후속 단계", "시각 콘티와 이미지 생성 미구현", "개발용 fixture를 완성된 AI 창작물로 승인할 수 없음", "v2 작업의 암호화 백업·멀티 PC 이동 미구현"]).model_dump()
         run.update({"_thread_id": rid, "_initial": {"run_id": rid, "project_id": pid, "idea": request.idea, "input_kind": request.input_kind,
                     "revision": 1, "automatic_rewrites": 0, "issues": []}, "_command": None})
         self._save(run)
@@ -605,7 +628,8 @@ class StudioService:
 
 def create_studio_router(root: Path, *, character_provider=None):
     from pydantic import BaseModel, ConfigDict, Field
-    from .character_contracts import TurnRequest, DirectionDecisionRequest
+    from .character_contracts import (TurnRequest, DirectionDecisionRequest, CandidateRequest, ComponentAttachRequest,
+                                     CoverageRequest, SheetBuildRequest, SheetDecisionRequest, VisualJobRequest, VisualRequest)
     from .character_service import CharacterService, CharacterConflict, CharacterNotFound
 
     service = StudioService(root)
@@ -617,6 +641,7 @@ def create_studio_router(root: Path, *, character_provider=None):
     router = APIRouter(prefix="/api/studio")
     router.service = service
     router.characters = characters
+    service.characters = characters
 
     class CharacterProjectInput(BaseModel):
         model_config = ConfigDict(extra="forbid")
@@ -628,7 +653,7 @@ def create_studio_router(root: Path, *, character_provider=None):
             return function(*args)
         except KeyError:
             raise HTTPException(404, "현재 프로젝트의 작업을 찾을 수 없습니다.") from None
-        except StudioConflict as error:
+        except (StudioConflict, VisualConflict) as error:
             raise HTTPException(409, str(error)) from None
         except ValueError:
             raise HTTPException(409, "저장된 데이터 계약이 현재 앱과 호환되지 않습니다. 원본은 보존했습니다.") from None
@@ -674,6 +699,62 @@ def create_studio_router(root: Path, *, character_provider=None):
     @router.post("/projects/{pid}/character/reopen")
     def character_reopen(pid: str, request: DirectionDecisionRequest):
         return character_call(pid, characters.reopen_direction, request.model_dump())
+
+    @router.post("/projects/{pid}/character/visual/jobs")
+    def visual_job(pid: str, request: VisualJobRequest):
+        return character_call(pid, characters.create_visual_job, request.model_dump())
+
+    @router.post("/projects/{pid}/character/visual/jobs/{job_id}/cancel")
+    def visual_cancel(pid: str, job_id: str, request: VisualRequest):
+        return character_call(pid, characters.cancel_visual_job, job_id, request.model_dump())
+
+    @router.post("/projects/{pid}/character/visual/jobs/{job_id}/image")
+    async def visual_upload(pid: str, job_id: str, request: str = Form(...), file: UploadFile = File(...)):
+        try:
+            if len(request) > 32000:
+                raise ValueError("metadata too large")
+            metadata = json.loads(request)
+        except (ValueError, TypeError):
+            raise HTTPException(422, "이미지 출처와 현재 버전을 확인해 주세요.") from None
+        try:
+            data = await file.read(MAX_IMAGE_BYTES + 1)
+        finally:
+            await file.close()
+        return character_call(pid, characters.upload_visual_image, job_id, metadata, data)
+
+    @router.post("/projects/{pid}/character/visual/select")
+    def visual_select(pid: str, request: CandidateRequest):
+        return character_call(pid, characters.select_visual_candidate, request.model_dump())
+
+    @router.post("/projects/{pid}/character/visual/coverage")
+    def visual_coverage(pid: str, request: CoverageRequest):
+        return character_call(pid, characters.save_visual_coverage, request.model_dump())
+
+    @router.post("/projects/{pid}/character/visual/components/{component_id}/attach")
+    def visual_attach(pid: str, component_id: str, request: ComponentAttachRequest):
+        return character_call(pid, characters.attach_visual_component, component_id, request.model_dump())
+
+    @router.post("/projects/{pid}/character/visual/sheet/build")
+    def visual_build(pid: str, request: SheetBuildRequest):
+        return character_call(pid, characters.build_visual_sheet, request.model_dump())
+
+    @router.post("/projects/{pid}/character/visual/sheet/confirm")
+    def visual_confirm(pid: str, request: SheetDecisionRequest):
+        return character_call(pid, characters.visual_sheet_decision, request.model_dump(), "confirm")
+
+    @router.post("/projects/{pid}/character/visual/sheet/reopen")
+    def visual_reopen(pid: str, request: SheetDecisionRequest):
+        return character_call(pid, characters.visual_sheet_decision, request.model_dump(), "reopen")
+
+    @router.get("/projects/{pid}/character/visual/sheet/export")
+    def visual_export(pid: str):
+        data = character_call(pid, characters.export_visual_sheet)
+        return Response(data, media_type="application/zip", headers={"Content-Disposition": 'attachment; filename="character-sheet.zip"'})
+
+    @router.get("/projects/{pid}/character/visual/assets/{asset_id}")
+    def visual_image(pid: str, asset_id: str):
+        data = character_call(pid, characters.visual_asset_bytes, asset_id)
+        return Response(data, media_type="image/png")
 
     @router.get("/projects/{pid}")
     def project(pid: str):

@@ -1,3 +1,5 @@
+import type { CharacterVisualState } from './characterVisualTypes';
+
 export interface CharacterReferenceObservation {
   label: string;
   desired_traits: string[];
@@ -32,11 +34,12 @@ export interface CharacterState {
   schema_id: 'toon-character-direction-v1';
   project_id: string;
   revision: number;
-  stage: 'direction' | 'candidates';
+  stage: 'direction' | 'candidates' | 'sheet' | 'complete';
   status: 'awaiting_input' | 'awaiting_review' | 'confirmed' | 'blocked';
   direction_confirmed: boolean;
-  visual_ready: false;
-  sheet_approved: false;
+  visual_ready: boolean;
+  sheet_approved: boolean;
+  visuals: CharacterVisualState;
   fixture: boolean;
   provider: string;
   brief: CharacterBrief | null;
