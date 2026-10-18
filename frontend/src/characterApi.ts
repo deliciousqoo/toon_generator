@@ -27,7 +27,7 @@ async function readResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function getCsrfToken(): Promise<string> {
+export async function getCsrfToken(): Promise<string> {
   if (csrfToken) return csrfToken;
   if (!csrfRequest) {
     csrfRequest = fetch('/api/bootstrap', { credentials: 'same-origin' })
@@ -41,6 +41,10 @@ async function getCsrfToken(): Promise<string> {
   return csrfRequest;
 }
 
+export function resetCsrfToken(): void {
+  csrfToken = '';
+}
+
 function characterPath(projectId: string): string {
   return `/api/studio/projects/${encodeURIComponent(projectId)}/character`;
 }
@@ -50,16 +54,20 @@ export async function getCharacter(projectId: string, signal?: AbortSignal): Pro
 }
 
 async function mutateCharacter(projectId: string, action: string, body: CharacterTurnInput | CharacterDecisionInput, signal?: AbortSignal): Promise<CharacterState> {
-  const token = await getCsrfToken();
-  const response = await fetch(`${characterPath(projectId)}/${action}`, {
-    method: 'POST',
-    signal,
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify(body),
-  });
-  if (response.status === 403) csrfToken = '';
-  return readResponse(response);
+  try {
+    const token = await getCsrfToken();
+    const response = await fetch(`${characterPath(projectId)}/${action}`, {
+      method: 'POST',
+      signal,
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+      body: JSON.stringify(body),
+    });
+    if (response.status === 403) resetCsrfToken();
+    return await readResponse(response);
+  } finally {
+    window.dispatchEvent(new Event('chatgpt-status-changed'));
+  }
 }
 
 export function sendCharacterTurn(projectId: string, input: CharacterTurnInput, signal?: AbortSignal): Promise<CharacterState> {
@@ -76,3 +84,16 @@ export function reopenCharacterDirection(projectId: string, input: CharacterDeci
 
 export const getCharacterState = getCharacter;
 export const submitCharacterTurn = sendCharacterTurn;
+
+export function hasAppliedCharacterTurn(before: CharacterState, after: CharacterState): boolean {
+  return before.project_id === after.project_id && Boolean(after.brief &&
+    (after.brief.version !== before.brief?.version || after.versions.length > before.versions.length));
+}
+
+export function hasAppliedCharacterMessage(state: CharacterState, message: string): boolean {
+  return state.messages.some((item, index) => {
+    if (item.role !== 'user' || item.content !== message.trim()) return false;
+    const response = state.messages[index + 1];
+    return response?.role === 'assistant' && Boolean(response.version && state.versions.some(brief => brief.version === response.version));
+  });
+}

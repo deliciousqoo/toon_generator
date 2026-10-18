@@ -1,0 +1,34 @@
+# ChatGPT 구독 연결
+
+기준일: 2026-10-18. 개인 로컬 Toon Studio의 캐릭터 대화용 연결이다. 일반 API 키·유료 API 전환·이미지 생성 경로는 포함하지 않는다.
+
+## 연결하고 대화하기
+
+1. 설치 스크립트로 Python 의존성과 프런트엔드를 갱신하고 앱을 실행한다.
+2. **ChatGPT 연결 → Continue with ChatGPT**를 누른다. 새 창이 막히면 **로그인 창 열기**를 누른다.
+3. OpenAI 화면에서 계정과 **Toon Studio** 이름을 확인하고 기본 프로필·ChatGPT 플랜 사용에 동의한다. 비밀번호·인증번호·토큰은 이 앱이나 채팅에 입력하지 않는다.
+4. ChatGPT **사용량 관리**에서 포함 한도 이후 **추가 크레딧 사용을 끈다**. 이 계정 설정을 앱이 조회·변경하는 공식 API는 확인하지 않았으므로, 앱의 안내를 설정 검증 완료로 취급하지 않는다.
+5. 앱으로 돌아오면 연결 상태와 계정별 모델 목록을 확인한다. 목록에 있으면 `gpt-6.1-sol`을 처음 선택한다. 목록 조회 실패 시 **모델 목록 다시 불러오기**를 누른다.
+6. 새 프로젝트에서 가상 캐릭터의 특징을 입력한다. 모델이 정리하고 별도 평가 역할이 검토한 방향 카드를 보면서 성격·느낌을 보완한다. **직접 수정** 또는 대화로 고치고 정확 버전을 확인한다.
+7. 확인 후 **캐릭터 방향 수정**으로 돌아올 수 있다. 방향 확인은 이미지 후보·시트 완성을 의미하지 않는다.
+
+새 탭의 로그인 콜백은 `http://127.0.0.1:<실행 포트>/auth/callback`으로 돌아온다. 로그인 대기는 10분이며, 만료되면 새 연결을 시작한다. 기본 앱은 미연결 상태에서 임의의 합성 답변이나 다른 제공자로 대체하지 않는다. 기존 합성 방향은 **이전 합성 결과**로 구분한다.
+
+## 한도와 오류
+
+- 구독 한도·사용 가능 여부 확인 오류는 새 호출을 멈추고 정지 상태를 저장한다. 앱 재시작·모델 변경·재로그인으로 사용 한도 정지를 자동 해제하지 않는다.
+- **사용량 관리**에서 확인한 뒤 **한도 확인 후 재개**를 눌러 정지를 해제한다. 작성한 메시지는 직접 다시 보내야 하며, 자동 재전송하지 않는다.
+- 인증 실패는 **다시 연결**로 복구한다. 유료 API·API 키·별도 모델 제공자로 자동 전환하는 코드가 없다.
+- 캐릭터 프로젝트당 시험 호출 최대 40회, 역할당 최대 60초다. 한 턴은 설계·독립 평가 최대 2회다. 실패·중단된 시도도 호출 상한에 포함하며, 두 역할을 실행할 여유가 없으면 시작하지 않는다.
+- 스트림이 `response.completed`로 끝나고 JSON·프로젝트·버전 검증을 통과해야 결과를 반영한다. 부분 응답·연결 끊김·미완료 결과는 적용하지 않으며 자동 재호출하지 않는다.
+- 요청 ID로 중복 요청을 재생한다. 도중 계정·모델이 바뀌면 원래 실행과 혼합하지 않고 멈춘다. 이전 방향과 사용자의 입력은 보존한다.
+
+## 저장과 개발 검증
+
+로그인 정보는 데이터 루트의 `private/chatgpt/session.bin`에 보관한다. Windows에서는 현재 사용자 DPAPI로 암호화하며, Unix에서는 소유자 전용 파일 권한을 사용한다. 앱 자체의 호스트 ID·등록 ID·검증된 신원·회전 토큰을 보호된 파일에 원자적으로 저장한다. 브라우저·로그·Git으로 자격 증명을 보내지 않는다. 이 연결 파일은 다른 PC로 복사하는 백업 자료가 아니며, 다른 PC에서는 다시 로그인한다.
+
+연결은 실행 데이터 폴더별로 저장된다. 검증 화면 `127.0.0.1:8878`은 `.test-data/character-preview-20261018`을 사용한다. 기본 바로가기의 `%LOCALAPPDATA%/ToonStudio`는 별도 폴더이므로 처음에는 다시 연결해야 한다. 현재 검증 작업을 계속 열려면 저장소에서 `Start-ToonStudio.cmd -Port 8878 -DataRoot .test-data/character-preview-20261018`로 실행한다.
+
+오프라인 기술 검증은 `python -m backend --character-fixture`로 명시한다. 이 모드는 환경 변수에 Ollama 설정이 있어도 결정론적 테스트 제공자만 사용한다. `?storyFixture=1`과 `?legacy=1`은 이전 기술 화면이다.
+
+공식 계약: [로그인](https://developers.openai.com/siwc/token-sharing-open-source/sign-in), [세션·갱신](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions), [모델·추론](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), [오류 복구](https://developers.openai.com/siwc/token-sharing-open-source/errors-and-recovery), [미지원 기능](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations).

@@ -183,7 +183,8 @@ class CharacterService:
                 self._record_operation(pid, "turn", request, {"request": request, "base_state": state,
                                        "version": version, "cache": {}, "events": [], "inflight": None,
                                        "provider": self.provider.name, "fixture": self.provider.fixture,
-                                       "approval_id": getattr(self.provider, "budget_id", None)})
+                                       "approval_id": getattr(self.provider, "budget_id", None),
+                                       "execution_identity": self._execution_identity()})
             return self._execute_turn(pid, request["request_id"])
 
     def _config(self, pid, request_id):
@@ -199,7 +200,12 @@ class CharacterService:
                 "previous_fields": fields, "question_field": state["question_field"],
                 "field_updates": {key: value for key, value in request["field_updates"].items() if value is not None},
                 "references": references,
-                "dialogue": [{"role": item["role"], "content": item["content"]} for item in state["messages"][-30:]]}
+                "dialogue": [{"role": item["role"], "content": item["content"]} for item in state["messages"][-30:]],
+                "_execution_identity": operation.get("execution_identity")}
+
+    def _execution_identity(self):
+        identity = getattr(self.provider, "execution_identity", None)
+        return identity() if identity else None
 
     def _validate_operation(self, pid, request_id, operation):
         try:
@@ -210,6 +216,7 @@ class CharacterService:
                     or operation["version"] != f"1.0.{len(base['versions']) + 1}"
                     or operation["provider"] != self.provider.name or operation["fixture"] != self.provider.fixture
                     or operation["approval_id"] != getattr(self.provider, "budget_id", None)
+                    or operation.get("execution_identity") != self._execution_identity()
                     or operation["request_hash"] != hashlib.sha256(dump(request).encode()).hexdigest()
                     or not isinstance(operation["cache"], dict) or not isinstance(operation["events"], list)):
                 raise ValueError("unsupported stored operation")
@@ -244,6 +251,8 @@ class CharacterService:
             op = self._operation(pid, request_id)
             if role in op["cache"]:
                 return copy.deepcopy(op["cache"][role])
+            if op.get("execution_identity") != self._execution_identity():
+                raise CharacterConflict("ChatGPT 연결 또는 모델이 변경됐습니다. 현재 연결에서 다시 요청해 주세요.")
             if op.get("inflight") and not self.provider.fixture:
                 raise CharacterConflict("이전 모델 호출의 완료 여부를 확인할 수 없습니다. 자동 재호출하지 않습니다.")
             if hasattr(self.provider, "budget_id"):
@@ -253,6 +262,15 @@ class CharacterService:
                 if used >= self.provider.approval["max_calls"]:
                     raise CharacterConflict("캐릭터 전용 모델 호출 한도를 모두 사용했습니다.")
                 self.db.execute("UPDATE character_provider_budget SET calls=calls+1 WHERE id=?", (self.provider.budget_id,))
+            if self.provider.name == "chatgpt_subscription":
+                # One bounded pilot per character project, including failed/ambiguous calls.
+                budget_id = f"chatgpt_subscription:{pid}"
+                self.db.execute("INSERT OR IGNORE INTO character_provider_budget VALUES(?,0)", (budget_id,))
+                used = self.db.execute("SELECT calls FROM character_provider_budget WHERE id=?", (budget_id,)).fetchone()[0]
+                if used >= 40 or (role == "character_designer" and used >= 39):
+                    from .chatgpt_provider import ChatGPTUsageStopped
+                    raise ChatGPTUsageStopped("character_call_limit", "이 캐릭터의 시험 호출 한도에 도달해 멈췄습니다. 이전 결과는 보관했습니다.")
+                self.db.execute("UPDATE character_provider_budget SET calls=calls+1 WHERE id=?", (budget_id,))
             op["inflight"] = role
             self._save_operation(pid, request_id, op)
         result = getattr(self.provider, method)(context)
@@ -283,7 +301,8 @@ class CharacterService:
     def _evaluator(self, state):
         pid, request_id = state["project_id"], state["request_id"]
         context = {"project_id": pid, "brief": state["brief"],
-                   "request_context": self._context(self._operation(pid, request_id))}
+                   "request_context": self._context(self._operation(pid, request_id)),
+                   "_execution_identity": self._operation(pid, request_id).get("execution_identity")}
         evaluation = DirectionEvaluation.model_validate(self._call(pid, request_id, "character_evaluator", "evaluate", context)).model_dump()
         if evaluation["project_id"] != pid or evaluation["version"] != state["brief"]["version"]:
             raise CharacterConflict("평가가 현재 프로젝트·캐릭터 방향 버전과 다릅니다.")
@@ -351,10 +370,19 @@ class CharacterService:
                 "awaiting_review" if state["can_confirm"] else "awaiting_input")
             state["messages"].append({"id": f"{request_id}-assistant", "role": "assistant", "content": values["assistant_message"],
                                       "at": now(), "version": brief["version"]})
-        except Exception:
+        except Exception as error:
             # Keep raw provider, validation and transport errors out of user state and logs.
-            state["issues"] = [{"code": "character_execution_failed", "severity": "blocker",
-                                "message": "이번 대화를 처리하지 못했습니다. 이전 방향을 보존했습니다. 입력을 확인해 다시 보내주세요."}]
+            from .chatgpt_provider import ChatGPTProviderError
+            code = error.code if isinstance(error, ChatGPTProviderError) else "character_execution_failed"
+            message = str(error) if isinstance(error, ChatGPTProviderError) else "이번 대화를 처리하지 못했습니다. 이전 방향을 보존했습니다. 입력을 확인해 다시 보내주세요."
+            if isinstance(error, ChatGPTProviderError):
+                with self._db_lock, self.db:
+                    failed_operation = self._operation(pid, request_id)
+                    failed_operation["failure"] = {"code": error.code, "http_status": error.http_status,
+                        "request_id": error.request_id, "error_param": error.error_param, "body_shape": error.body_shape,
+                        "diagnostic_hint": error.diagnostic_hint}
+                    self._save_operation(pid, request_id, failed_operation)
+            state["issues"] = [{"code": code, "severity": "blocker", "message": message}]
             state["status"], state["can_confirm"] = "blocked", False
             state["messages"].append({"id": f"{request_id}-assistant", "role": "assistant",
                                       "content": state["issues"][0]["message"], "at": now(), "version": None})

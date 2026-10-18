@@ -603,14 +603,14 @@ class StudioService:
                 self._event(rid, "orchestrator", self._raw(rid)["current_stage"], f"실행 오류: {type(error).__name__}. 자동 전체 재실행을 중단했습니다.")
 
 
-def create_studio_router(root: Path):
+def create_studio_router(root: Path, *, character_provider=None):
     from pydantic import BaseModel, ConfigDict, Field
     from .character_contracts import TurnRequest, DirectionDecisionRequest
     from .character_service import CharacterService, CharacterConflict, CharacterNotFound
 
     service = StudioService(root)
     try:
-        characters = CharacterService(root)
+        characters = CharacterService(root, provider=character_provider)
     except Exception:
         service.close()
         raise

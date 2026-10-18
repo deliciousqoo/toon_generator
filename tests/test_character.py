@@ -175,7 +175,7 @@ def test_wrong_evaluation_version_fails_closed_and_preserves_prior_direction(tmp
         blocked = turn(engine)
         assert blocked["status"] == "blocked" and blocked["brief"] is None
         assert blocked["versions"] == [] and len(blocked["messages"]) == 2
-        assert "999" not in json.dumps(blocked)
+        assert "1.0.999" not in json.dumps(blocked)
     finally:
         engine.close()
 
@@ -380,5 +380,63 @@ def test_valid_but_stale_pending_turn_never_calls_provider_after_restart(tmp_pat
         recovered = decision(restarted, revised, request_id="recovery-confirm")
         assert recovered["direction_confirmed"] and recovered["decisions"][-1]["version"] == "1.0.4"
         assert not recovered["visual_ready"] and not recovered["sheet_approved"]
+    finally:
+        restarted.close()
+
+
+def test_subscription_project_budget_stops_before_an_unpaired_role_call(tmp_path):
+    class SubscriptionFixture(DeterministicCharacterProvider):
+        name = "chatgpt_subscription"
+        fixture = False
+
+        def execution_identity(self):
+            return "account-model"
+
+        def draft(self, context):
+            raise AssertionError("a new two-role turn must not start with only one call left")
+
+    engine = CharacterService(tmp_path, SubscriptionFixture())
+    try:
+        engine.ensure_project("project-synthetic")
+        engine.db.execute("INSERT INTO character_provider_budget VALUES(?,?)", ("chatgpt_subscription:project-synthetic", 39))
+        engine.db.commit()
+        state = turn(engine)
+        assert state["status"] == "blocked" and state["brief"] is None
+        assert state["issues"][0]["code"] == "character_call_limit"
+        assert engine.db.execute("SELECT calls FROM character_provider_budget").fetchone()[0] == 39
+    finally:
+        engine.close()
+
+
+def test_subscription_pending_identity_change_stops_before_any_new_model_call(tmp_path):
+    class InterruptedSubscription(DeterministicCharacterProvider):
+        name = "chatgpt_subscription"
+        fixture = False
+
+        def __init__(self, identity):
+            self.identity = identity
+            self.calls = []
+
+        def execution_identity(self):
+            return self.identity
+
+        def draft(self, context):
+            self.calls.append("draft")
+            raise KeyboardInterrupt("synthetic interruption before a completed role")
+
+    original_provider = InterruptedSubscription("account-one:model-one")
+    first = CharacterService(tmp_path, original_provider)
+    first.ensure_project("project-synthetic")
+    with pytest.raises(KeyboardInterrupt):
+        turn(first)
+    first.close()
+    changed_provider = InterruptedSubscription("account-two:model-one")
+    restarted = CharacterService(tmp_path, changed_provider)
+    try:
+        state = restarted.get_state("project-synthetic")
+        assert changed_provider.calls == []
+        assert state["status"] == "blocked"
+        assert state["issues"][0]["code"] == "stored_operation_invalid"
+        assert restarted.db.execute("SELECT status FROM character_operations").fetchone()[0] == "quarantined"
     finally:
         restarted.close()

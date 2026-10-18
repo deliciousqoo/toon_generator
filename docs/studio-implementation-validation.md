@@ -79,3 +79,25 @@ pnpm --dir frontend run build
 ```
 
 테스트는 가상의 재료와 결정론적 worker로 수행했다. 이 결과는 자연어 이해·레퍼런스 이미지 분석·캐릭터 독창성·생성 화질을 검증하지 않는다. 실제 제공자 권고와 제안 한도는 [모델 연결 권고안](character-model-evaluation.md)에 있으며 OpenAI 어댑터·비용 예약 장부는 후속 작업이다. 캐릭터 상태·체크포인트를 포함하는 v2 전체 백업도 이번 검증에 포함하지 않았다.
+
+## 2026-10-18 ChatGPT Pro 구독 연결
+
+D-0037과 사용자의 실제 연결·대화 검증 요청에 따라 기본 캐릭터 제공자를 `chatgpt_subscription`으로 연결했다. 위의 결정론적 검증과는 별도 기록이다. 유료 API 키, 다른 앱의 로그인 정보, 제공자 자동 전환은 사용하지 않았다. `--character-fixture`를 명시한 경우에만 오프라인 제공자를 사용한다.
+
+- 사용자가 OpenAI 동의 화면을 완료했다. 앱 자체의 OAuth state·PKCE·nonce·발급 client ID·JWT 서명/신원을 검증하고 계정별 모델 7개를 조회했다. 실제 선택 모델은 `gpt-6.1-sol`이며 reasoning effort나 service tier는 별도 지정하지 않았다.
+- 브라우저에서 Toon Studio의 플랜 사용 허용 ON, 한도 후 추가 크레딧 사용 OFF, 자동 충전 OFF를 직접 확인했다. 이는 해당 시점 계정 설정의 관찰이다. 앱이 그 설정을 조회·잠금하는 공식 API를 구현한 것으로 표현하지 않는다.
+- 인증 정보는 검증 전용 데이터 루트의 `private/chatgpt/session.bin`에 Windows DPAPI로 암호화되어 저장된다. 자격 증명·계정의 원본 식별자·OAuth 코드를 UI, 로그, Git에 남기지 않는다.
+- 초기 실제 요청에서 HTTP 200 응답의 Content-Type이 누락되고 SSE 본문이 도착하는 동작을 관찰했다. 또 `response.output_text.delta`와 `response.output_text.done`이 일치해도 `response.completed`의 output이 비어 있는 경우를 관찰했다. 원문 대신 구조·길이·일치 여부만 내부 실패 메타데이터에 남겨 진단했다. 완료 이벤트와 구조 검증을 통과하지 못한 요청은 방향 버전을 생성하지 않았다.
+- terminal output이 정확히 빈 배열인 경우에는 완료된 assistant `response.output_item.done`, `response.output_text.done`, delta의 내용·항목 ID·output/content index가 모두 일치하고 전체 응답 status가 명시적 completed일 때만 복원한다. terminal 본문이 있는 경로는 그 본문을 대조한다. 중단되거나 미완료인 조각만으로 결과를 만들지 않는다.
+- 실제 브라우저에서 외형만 입력 → 성격 질문 → 성격 반영 → 느낌 질문 → 느낌 반영 → 성격만 직접 수정 → 정확 `v1.0.4` 확인 → 수정 단계 복귀를 완료했다. SQLite에서 외형·느낌·말투·특징 목록·레퍼런스의 값이 부분 수정 전후 동일하고 성격만 지정한 값으로 바뀌었음을 대조했다. 4개 버전, 18개 메시지, 2개 결정이 보존됐고 시각/시트 완료 플래그는 모두 false였다.
+- 서버를 최종 비동기 요청 코드로 재시작하고 페이지를 불러온 뒤 상태 payload의 SHA-256, 버전·메시지·결정·호출 수가 모두 이전과 같음을 확인했다. 복구 과정에서 추가 모델 호출은 없었다. 이어 실제 대화로 말투만 추가해 `v1.0.5`를 만들고 다른 항목이 동일한지 DB로 대조한 뒤 방향을 확인했다. 최종 5개 버전, 20개 메시지, 3개 결정, 15회 시도이며 `direction_confirmed=true`, `visual_ready=false`, `sheet_approved=false`다. 초기 거부된 5회도 시도 수에 포함된다.
+- 한도 초과 뒤 연결 끊김, 재시작 후 정지 유지, 계정·모델 변경, 프로젝트별 40회 상한, 역할 호출 중 중단, 부분 스트림·잘못된 JSON·잘못된 버전은 모의 HTTP와 로컬 DB로 검사한다. 실제 구독 한도를 소진하는 검사는 수행하지 않는다.
+- 연결·한도 실패가 HTTP 200의 blocked 상태로 반환돼도 새로운 방향 버전이 없으면 대화 입력과 직접 수정값을 유지하도록 보완했다. 미전송 초안의 새로고침 복구는 이번 범위에 포함하지 않았다.
+- 독립 검토에서 찾은 세 가지 경계를 보완했다. HTTP 401·429 헤더를 받는 즉시 정지를 저장하고, terminal 본문이 있어도 명시적 응답 완료와 assistant 메시지를 확인한다. `AsyncClient` 요청은 남은 총 시간의 `asyncio.timeout` 안에서 실행하며 읽기별 타이머가 연장되는 문제를 막았다. 실제 시간 초과 시 스트림 취소·정리와 요청 1회만 발생함을 모의 스트림으로 검증했다. 실제 서버에서 재시작 후 두 역할의 후속 대화도 성공했다.
+- 최종 전체 Python 검사: **250개 및 25개 subtest 통과**(49.97초). 구독 제공자 Mock 109개, OAuth 33개, 앱 통합 2개와 캐릭터/기존 회귀 검사를 포함한다. TypeScript `tsc -b`와 Vite production build도 통과했다. 최종 확인 상태로 한 번 더 재시작한 뒤 payload hash와 15회 시도 수가 그대로임을 확인했다.
+
+```powershell
+.venv/Scripts/python.exe -m pytest -q -o faulthandler_timeout=30 --basetemp .test-data/subscription-release-20261018 tests
+```
+
+프로토콜은 [Sign in with ChatGPT](chatgpt-subscription-guide.md)의 공식 문서와 [Responses 스트리밍 이벤트](https://developers.openai.com/api/reference/resources/responses/streaming-events)를 대조했다. 이미지 후보·캐릭터 시트·레퍼런스 이미지 분석·전체 v2 백업은 이 연결 검증의 완료 범위가 아니다.

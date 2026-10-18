@@ -2,13 +2,13 @@
 
 개인 작업용 로컬 플랫폼에서 인스타툰 프로젝트를 설정하고, 에피소드의 콘티와 이미지 초안을 만드는 AI 보조 파이프라인을 정의한다.
 
-> **캐릭터 중심 첫 구현 — 2026-10-18:** D-0036에 따라 기본 화면을 캐릭터 대화로 변경했다. 특징 입력 → 필요한 질문 → 방향 카드 → 수정 → 정확 버전 확인을 LangGraph·SQLite에 연결했다. 기본 실행은 **AI 미연결 합성 테스트**다. 캐릭터 시각 후보·실제 시트·이미지 생성은 아직 구현하지 않았다.
+> **캐릭터 대화와 ChatGPT 구독 연결 — 2026-10-18:** D-0036/D-0037에 따라 특징 입력 → 필요한 질문 → 방향 카드 → 수정 → 정확 버전 확인을 LangGraph·SQLite에 연결했다. 기본 캐릭터 제공자는 앱 자체의 **Sign in with ChatGPT** 연결이다. 로그인·구독 사용 동의·모델 선택 후 사용하며, 한도 도달 시 멈춘다. 유료 API 자동 전환은 없다. 캐릭터 시각 후보·실제 시트·이미지 생성은 아직 구현하지 않았다.
 
-새 화면은 [캐릭터 대화 안내](docs/character-direction-guide.md), [구현 검증 기록](docs/studio-implementation-validation.md)을 참고한다. 이전 이야기 기술 테스트는 `?storyFixture=1`, Stage 01–05 프로토타입은 `?legacy=1`에서 확인한다. 실제 캐릭터 시트가 없는 새 프로젝트는 이야기 제작을 시작할 수 없다. [실제 모델 연결 권고안](docs/character-model-evaluation.md)은 선택 제안이며 실행 허가나 연결 완료가 아니다.
+새 화면은 [구독 연결 안내](docs/chatgpt-subscription-guide.md), [캐릭터 대화 안내](docs/character-direction-guide.md), [구현 검증 기록](docs/studio-implementation-validation.md)을 참고한다. 이전 이야기 기술 테스트는 `?storyFixture=1`, Stage 01–05 프로토타입은 `?legacy=1`에서 확인한다. 실제 캐릭터 시트가 없는 새 프로젝트는 이야기 제작을 시작할 수 없다. 연결 성공 여부와 실제 대화 검증은 별도로 기록한다.
 
 ## 실행
 
-2026-10-12의 명시적 구현 요청(D-0027)에 따라 `platform_build`로 전환해 로컬 MVP를 구현했다. 현재는 합성 자료와 규칙 기반 MOCK 이미지로 제작 흐름을 확인하는 모드다.
+2026-10-12의 명시적 구현 요청(D-0027)에 따라 `platform_build`로 전환해 로컬 MVP를 구현했다. 현재 기본 화면은 D-0037의 ChatGPT 구독 연결을 사용하는 캐릭터 대화다. 이전 제작 흐름과 규칙 기반 MOCK 이미지는 별도 기술 검증 경로에 보존한다.
 
 - 이 PC에서는 `Toon Studio.lnk` 또는 `Start-ToonStudio.cmd`를 실행하면 앱과 브라우저가 열린다.
 - 접속 주소: `http://127.0.0.1:8765`.

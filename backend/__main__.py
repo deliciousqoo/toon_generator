@@ -12,11 +12,12 @@ from .app import create_app
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Toon Studio synthetic-only local MVP")
+    parser = argparse.ArgumentParser(description="Toon Studio local character workspace")
     parser.add_argument("--data-root", default=None)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--dev", action="store_true")
+    parser.add_argument("--character-fixture", action="store_true", help="Explicit offline character engineering test")
     parser.add_argument("--stop", action="store_true")
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535:
@@ -42,7 +43,7 @@ def main():
     except (urllib.error.URLError, TimeoutError):
         if args.stop:
             return
-    app = create_app(args.data_root, port=args.port, dev=args.dev)
+    app = create_app(args.data_root, port=args.port, dev=args.dev, character_fixture=args.character_fixture)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=args.port, access_log=False, proxy_headers=False, log_level="warning"))
     app.state.shutdown_callback = lambda: setattr(server, "should_exit", True)
     if not args.no_browser:

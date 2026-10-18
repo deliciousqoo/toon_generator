@@ -20,6 +20,10 @@ from .native_save import save_backup_file
 from .service import Conflict, Studio
 from .storage import Store
 from .studio import create_studio_router
+from .chatgpt_auth import ChatGPTAuth, ChatGPTAuthError
+from .chatgpt_provider import ChatGPTCharacterProvider
+from .chatgpt_routes import create_chatgpt_router
+from .character_workers import DeterministicCharacterProvider
 
 MAX_BACKUP = 256 * 1024 * 1024
 
@@ -101,10 +105,16 @@ def default_data_root():
     return Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local/share")) / "ToonStudio"
 
 
-def create_app(data_root=None, *, port=8765, dev=False):
+def create_app(data_root=None, *, port=8765, dev=False, character_fixture=False, chatgpt_auth=None):
     store = Store(data_root or default_data_root())
     studio = Studio(store)
-    studio_router = create_studio_router(store.root)
+    auth = chatgpt_auth or ChatGPTAuth(store.root)
+    provider = DeterministicCharacterProvider() if character_fixture else ChatGPTCharacterProvider(auth)
+    try:
+        studio_router = create_studio_router(store.root, character_provider=provider)
+    except Exception:
+        auth.close()
+        raise
 
     @asynccontextmanager
     async def lifespan(app):
@@ -114,14 +124,19 @@ def create_app(data_root=None, *, port=8765, dev=False):
             try:
                 studio_router.characters.close()
             finally:
-                studio_router.service.close()
+                try:
+                    studio_router.service.close()
+                finally:
+                    auth.close()
 
     app = FastAPI(title="Toon Studio local", version=APP_VERSION, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store, app.state.studio = store, studio
     app.state.workflow_studio = studio_router.service
     app.state.character_studio = studio_router.characters
+    app.state.chatgpt_auth = auth
     app.include_router(studio_router)
+    app.include_router(create_chatgpt_router(auth, port=port, fixture=character_fixture))
     token = secrets.token_urlsafe(32)
     ports = {port} | ({5173} if dev else set())
     allowed_hosts = {f"{host}:{p}" for host in ("127.0.0.1", "localhost") for p in ports}
@@ -135,12 +150,15 @@ def create_app(data_root=None, *, port=8765, dev=False):
             local_client = False
         if not local_client or host not in allowed_hosts:
             return JSONResponse({"detail": "이 앱은 현재 PC에서만 접속할 수 있습니다."}, status_code=403)
+        # OAuth alone returns from an external origin. State/nonce/PKCE are checked
+        # by this exact GET callback; every other route keeps the local boundary.
+        oauth_callback = request.method == "GET" and request.url.path == "/auth/callback"
         origin = request.headers.get("origin")
-        if origin:
+        if origin and not oauth_callback:
             parsed = urlsplit(origin)
             if parsed.scheme != "http" or parsed.netloc.lower() != host:
                 return JSONResponse({"detail": "현재 앱에서 보낸 요청만 허용합니다."}, status_code=403)
-        if request.headers.get("sec-fetch-site") == "cross-site":
+        if request.headers.get("sec-fetch-site") == "cross-site" and not oauth_callback:
             return JSONResponse({"detail": "외부 페이지의 요청은 허용하지 않습니다."}, status_code=403)
         try:
             length = int(request.headers.get("content-length", "0"))
@@ -154,7 +172,7 @@ def create_app(data_root=None, *, port=8765, dev=False):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
-        if request.url.path.startswith("/api"):
+        if request.url.path.startswith("/api") or oauth_callback:
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -184,7 +202,28 @@ def create_app(data_root=None, *, port=8765, dev=False):
     @app.get("/api/health")
     def health():
         return {"app": "toon-studio", "version": APP_VERSION, "mode": "platform_build", "adapter": "mock",
-                "orchestrator": "langgraph_sqlite", "studio_schema_version": "2.0.0"}
+                "orchestrator": "langgraph_sqlite", "studio_schema_version": "2.0.0",
+                "character_adapter": studio_router.characters.provider.name}
+
+    @app.get("/auth/callback", include_in_schema=False)
+    def chatgpt_callback(request: Request):
+        from fastapi.responses import HTMLResponse, RedirectResponse
+        try:
+            pairs = list(request.query_params.multi_items())
+            if len(pairs) != len(dict(pairs)) or len(str(request.url.query)) > 24000:
+                raise ChatGPTAuthError("invalid_callback", "로그인 응답을 확인할 수 없습니다. 앱에서 다시 연결해 주세요.")
+            auth.complete_login(dict(pairs))
+        except ChatGPTAuthError:
+            return HTMLResponse("<html lang='ko'><meta charset='utf-8'><title>ChatGPT 연결</title><p>ChatGPT 연결을 완료하지 못했습니다. 앱으로 돌아가 연결 상태를 확인해 주세요.</p><a href='/'>Toon Studio로 돌아가기</a></html>", status_code=400)
+        try:
+            models = auth.list_models()
+            if models and not auth.status().get("model"):
+                selected = next((item["slug"] for item in models if item["slug"] == "gpt-6.1-sol"), models[0]["slug"])
+                auth.select_model(selected)
+        except ChatGPTAuthError:
+            # The verified connection is preserved when model discovery is unavailable.
+            pass
+        return RedirectResponse("/", status_code=303)
 
     @app.get("/api/bootstrap")
     def bootstrap():

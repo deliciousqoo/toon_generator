@@ -20,7 +20,7 @@ def create(client):
 
 def test_character_first_project_requires_sheet_and_scopes_requests(tmp_path, monkeypatch):
     monkeypatch.delenv("TOON_CHARACTER_ENABLE_OLLAMA", raising=False)
-    with client_for(create_app(tmp_path)) as client:
+    with client_for(create_app(tmp_path, character_fixture=True)) as client:
         project = create(client)
         assert project["character_package"]["sheet_status"] == "missing"
         assert project["character_package"]["approval_status"] == "pending"
@@ -38,7 +38,7 @@ def test_character_first_project_requires_sheet_and_scopes_requests(tmp_path, mo
 
 def test_character_dialogue_edit_confirm_reopen_and_restart(tmp_path, monkeypatch):
     monkeypatch.delenv("TOON_CHARACTER_ENABLE_OLLAMA", raising=False)
-    app = create_app(tmp_path)
+    app = create_app(tmp_path, character_fixture=True)
     with client_for(app) as client:
         project = create(client)
         pid = project["id"]
@@ -68,7 +68,7 @@ def test_character_dialogue_edit_confirm_reopen_and_restart(tmp_path, monkeypatc
         assert confirmed["sheet_approved"] is False
         assert client.post(f"/api/studio/projects/{pid}/runs", json={"idea": "시트 없는 합성 이야기"}, headers=headers(client)).status_code == 409
 
-    with client_for(create_app(tmp_path)) as client:
+    with client_for(create_app(tmp_path, character_fixture=True)) as client:
         restored = client.get(path).json()
         assert restored == confirmed
         reopened = client.post(path + "/reopen", json={"request_id": "reopen", "expected_revision": restored["revision"],

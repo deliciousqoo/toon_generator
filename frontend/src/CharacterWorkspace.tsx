@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { ArrowRight, Check, CircleAlert, Image, LoaderCircle, Pencil, RotateCcw, Send, X } from 'lucide-react';
-import { CharacterApiError, confirmCharacterDirection, getCharacter, reopenCharacterDirection, sendCharacterTurn } from './characterApi';
+import { CharacterApiError, confirmCharacterDirection, getCharacter, hasAppliedCharacterMessage, hasAppliedCharacterTurn, reopenCharacterDirection, sendCharacterTurn } from './characterApi';
+import { canUseChatGPT, isChatGPTUsageLimit, safeConnectionUrl } from './chatgptApi';
+import type { ChatGPTConnectionStatus } from './chatgptApi';
 import type { CharacterBrief, CharacterFieldUpdates, CharacterState } from './characterTypes';
 import './characterStyles.css';
 
@@ -9,6 +11,8 @@ interface CharacterWorkspaceProps {
   projectId: string;
   initialDraft?: string;
   onStateChange?: (state: CharacterState) => void;
+  connectionStatus?: ChatGPTConnectionStatus | null;
+  onConnectionNeeded?: () => void;
 }
 
 interface BriefFields {
@@ -58,13 +62,14 @@ function versionLabel(version: string): string {
   return `v${version}`;
 }
 
-export default function CharacterWorkspace({ projectId, initialDraft = '', onStateChange }: CharacterWorkspaceProps) {
+export default function CharacterWorkspace({ projectId, initialDraft = '', onStateChange, connectionStatus, onConnectionNeeded }: CharacterWorkspaceProps) {
   const [state, setState] = useState<CharacterState | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
   const [chatField, setChatField] = useState<ChatField | ''>('');
   const [error, setError] = useState('');
+  const [usageLimited, setUsageLimited] = useState(false);
   const [notice, setNotice] = useState('');
   const [editDraft, setEditDraft] = useState<BriefFields | null>(null);
   const [editBase, setEditBase] = useState<BriefFields | null>(null);
@@ -89,6 +94,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
     initialDraftRecovery.current = { text: startingDraft.current.trim(), active: Boolean(startingDraft.current.trim()) };
     setChatField('');
     setError('');
+    setUsageLimited(false);
     setNotice('');
     setEditDraft(null);
     setEditBase(null);
@@ -112,7 +118,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
   useEffect(() => {
     const recovery = initialDraftRecovery.current;
     if (!recovery.active || state?.project_id !== projectId) return;
-    if (!state.messages.some(message => message.role === 'user' && message.content === recovery.text)) return;
+    if (!hasAppliedCharacterMessage(state, recovery.text)) return;
     // Only the untouched first-turn recovery input can be reconciled with a saved message.
     // A draft the user has edited must survive every subsequent load or conflict refresh.
     recovery.active = false;
@@ -151,7 +157,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
     }
   }
 
-  async function mutate(work: (signal: AbortSignal) => Promise<CharacterState>): Promise<boolean> {
+  async function mutate(work: (signal: AbortSignal) => Promise<CharacterState>, turnBase?: CharacterState): Promise<boolean> {
     const controller = connection.current;
     if (!controller || controller.signal.aborted || mutationLock.current) return false;
     mutationLock.current = true;
@@ -163,9 +169,16 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
       if (controller.signal.aborted) return false;
       setState(value);
       requestIdentity.current = null;
+      if (turnBase && !hasAppliedCharacterTurn(turnBase, value)) {
+        setUsageLimited(value.issues.some(issue => ['subscription_limit', 'subscription_sharing_usage_limit_exceeded', 'subscription_sharing_usage_unavailable', 'rate_limit_exceeded', 'insufficient_quota', 'character_call_limit'].includes(issue.code)));
+        setError(value.issues.find(issue => issue.severity === 'blocker')?.message || '이번 입력을 반영하지 못했습니다. 작성한 내용은 보관했습니다.');
+        return false;
+      }
+      setUsageLimited(false);
       return true;
     } catch (reason) {
       if (controller.signal.aborted) return false;
+      if (reason instanceof CharacterApiError && reason.status === 429) setUsageLimited(true);
       if (reason instanceof CharacterApiError && reason.status === 409) {
         try {
           const latest = await getCharacter(projectId, controller.signal);
@@ -188,7 +201,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
 
   async function submitTurn(event?: FormEvent) {
     event?.preventDefault();
-    if (!state || !draft.trim() || busy || loading || state.direction_confirmed || editDraft) return;
+    if (!state || !draft.trim() || busy || loading || state.direction_confirmed || editDraft || !canUseChatGPT(connectionStatus)) return;
     const message = draft.trim();
     if (message.length > (chatField === 'voice' ? 2000 : 3000)) {
       setError(chatField === 'voice' ? '말투는 2,000자까지 작성해 주세요.' : '대화는 한 번에 3,000자까지 작성해 주세요.');
@@ -200,7 +213,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
     };
     const sent = await mutate(signal => sendCharacterTurn(projectId, {
       ...payload, request_id: requestId('turn', payload),
-    }, signal));
+    }, signal), state);
     if (sent) {
       setDraft(current => current.trim() === message ? '' : current);
       setChatField('');
@@ -225,7 +238,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
 
   async function saveEdits(event: FormEvent) {
     event.preventDefault();
-    if (!state || !editDraft || !editBase || busy || loading) return;
+    if (!state || !editDraft || !editBase || busy || loading || !canUseChatGPT(connectionStatus)) return;
     const updates: CharacterFieldUpdates = {};
     for (const field of Object.keys(editDraft) as (keyof BriefFields)[]) {
       if (editDraft[field] === editBase[field]) continue;
@@ -251,7 +264,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
     };
     const saved = await mutate(signal => sendCharacterTurn(projectId, {
       ...payload, request_id: requestId('edit', payload),
-    }, signal));
+    }, signal), state);
     if (saved) {
       setEditDraft(null);
       setEditBase(null);
@@ -271,13 +284,19 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
   }
 
   const locked = loading || busy;
+  const connectionReady = canUseChatGPT(connectionStatus);
+  const fixtureActive = Boolean(connectionStatus?.fixture);
+  const usageStopped = isChatGPTUsageLimit(connectionStatus);
+  const usageUrl = safeConnectionUrl(connectionStatus?.manage_usage_url);
+  const priorFixture = state?.fixture && state.messages.length > 0 && !fixtureActive;
+  const modeLabel = fixtureActive ? '합성 테스트' : priorFixture ? '이전 합성 결과' : connectionStatus?.blocked ? usageStopped ? '사용 한도 · 중단' : 'ChatGPT 연결 확인' : connectionReady ? 'ChatGPT 구독 사용 중' : connectionStatus?.connected && connectionStatus.sharing ? '모델 선택 필요' : 'ChatGPT 연결 필요';
   const confirmed = state?.direction_confirmed ?? false;
   const currentStage = confirmed ? 1 : 0;
 
   return <section className="character-workspace" aria-labelledby="character-title" aria-busy={loading || busy}>
     <header className="character-heading">
       <h1 id="character-title">{confirmed ? '캐릭터 후보' : '캐릭터부터 정해 볼까요?'}</h1>
-      {state?.fixture ? <span className="character-test-badge" title="정해진 규칙을 사용하는 합성 테스트입니다.">테스트 · AI 미연결</span> : null}
+      <span className="character-test-badge">{modeLabel}</span>
     </header>
 
     <nav aria-label="캐릭터 제작 단계">
@@ -293,6 +312,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
 
     {error ? <div className="character-error" role="alert">
       <CircleAlert size={17} aria-hidden="true" /><p>{error}</p>
+      {(usageLimited || connectionStatus?.blocked) && usageUrl ? <a className="character-button subtle" href={usageUrl} target="_blank" rel="noopener noreferrer">사용량 관리</a> : null}
       <button className="character-button subtle" type="button" disabled={locked} onClick={() => void reload()}><RotateCcw size={14} aria-hidden="true" />다시 불러오기</button>
     </div> : null}
     <p className="character-announcement" role="status">{busy ? '입력한 내용을 반영하고 있습니다.' : loading && state ? '현재 결과를 다시 불러오는 중입니다.' : notice}</p>
@@ -311,16 +331,17 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
 
         {!confirmed ? <form className="character-composer" onSubmit={event => void submitTurn(event)}>
           <label htmlFor="character-reply" className="character-question">{chatField ? FIELD_QUESTIONS[chatField] : state.next_question || '어떤 부분을 바꾸고 싶으세요?'}</label>
-          {state.fixture && state.brief ? <label className="character-chat-target" htmlFor="character-chat-field">반영할 항목
+          {fixtureActive && state.brief ? <label className="character-chat-target" htmlFor="character-chat-field">반영할 항목
             <select id="character-chat-field" value={chatField} disabled={locked || Boolean(editDraft)} onChange={event => { initialDraftRecovery.current.active = false; setChatField(event.target.value as ChatField | ''); }}>
               <option value="">현재 질문</option>
               {(['appearance', 'personality', 'desired_feeling', 'voice'] as const).map(field => <option value={field} key={field}>{FIELD_LABELS[field]}</option>)}
             </select>
           </label> : null}
           <textarea id="character-reply" ref={composer} value={draft} maxLength={chatField === 'voice' ? 2000 : 3000} rows={3} disabled={locked || Boolean(editDraft)}
-            placeholder={state.question_field === 'review' ? '바꾸고 싶은 특징을 이야기해 주세요.' : '예: 낯을 가리지만 친해지면 장난이 많은 가상의 캐릭터예요.'}
+            placeholder={state.question_field === 'review' ? '바꾸고 싶은 특징을 이야기해 주세요.' : '예: 낯을 가리지만 친해지면 장난이 많은 캐릭터예요.'}
             onChange={event => { initialDraftRecovery.current.active = false; setDraft(event.target.value); }} onKeyDown={handleComposerKey} />
-          <div className="character-composer-actions"><span>Ctrl / ⌘ + Enter로 보내기</span><button type="submit" className="character-button primary" disabled={locked || !draft.trim() || Boolean(editDraft)}>
+          {!connectionReady ? <div className="character-connection-required"><span>{usageStopped ? '사용 한도로 작업이 중단됐습니다.' : 'ChatGPT 연결 후 대화를 이어갈 수 있습니다.'}</span><button type="button" className="character-button subtle" onClick={onConnectionNeeded}>{usageStopped ? '사용량·재개 설정' : 'ChatGPT 연결'}</button></div> : null}
+          <div className="character-composer-actions"><span>Ctrl / ⌘ + Enter로 보내기</span><button type="submit" className="character-button primary" disabled={locked || !draft.trim() || Boolean(editDraft) || !connectionReady}>
             {busy ? <LoaderCircle size={15} className="character-spin" aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}보내기
           </button></div>
         </form> : <div className="character-direction-confirmed"><Check size={16} aria-hidden="true" />캐릭터 방향 확인됨</div>}
@@ -346,7 +367,7 @@ export default function CharacterWorkspace({ projectId, initialDraft = '', onSta
                 value={editDraft[field]} disabled={locked} onChange={event => { setEditDraft(current => current ? { ...current, [field]: event.target.value } : current); setEditError(''); }} />
             </label>)}
             {editError ? <p className="character-edit-error" role="alert">{editError}</p> : null}
-            <div className="character-result-actions"><button type="button" className="character-button" disabled={locked} onClick={() => { setEditDraft(null); setEditBase(null); setEditError(''); }}><X size={15} aria-hidden="true" />취소</button><button className="character-button primary" type="submit" disabled={locked}>수정 반영<Check size={15} aria-hidden="true" /></button></div>
+            <div className="character-result-actions"><button type="button" className="character-button" disabled={locked} onClick={() => { setEditDraft(null); setEditBase(null); setEditError(''); }}><X size={15} aria-hidden="true" />취소</button><button className="character-button primary" type="submit" disabled={locked || !connectionReady}>수정 반영<Check size={15} aria-hidden="true" /></button></div>
           </form> : !confirmed ? <div className="character-result-actions">
             <button type="button" className="character-button" disabled={locked} onClick={startEditing}><Pencil size={14} aria-hidden="true" />직접 수정</button>
             <button type="button" className="character-button primary" disabled={locked || !state.can_confirm || Boolean(draft.trim())} onClick={() => void decide('confirm')}>방향 확인하고 다음으로<ArrowRight size={15} aria-hidden="true" /></button>

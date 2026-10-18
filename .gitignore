@@ -23,3 +23,6 @@ studio-provider.approval.json
 *.gguf
 *.safetensors
 character-provider.approval.json
+private/
+chatgpt-auth*.json
+chatgpt-credentials*
